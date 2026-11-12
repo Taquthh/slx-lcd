@@ -42,7 +42,10 @@ fn list_themes() -> Vec<String> {
             rd.flatten()
                 .filter_map(|e| {
                     let p = e.path();
-                    (p.extension()? == "json").then(|| p.file_stem()?.to_string_lossy().to_string())
+                    p.extension()
+                        .filter(|extension| *extension == "json")
+                        .and_then(|_| p.file_stem())
+                        .map(|stem| stem.to_string_lossy().into_owned())
                 })
                 .collect()
         })
