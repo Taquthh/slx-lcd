@@ -1,0 +1,158 @@
+{
+  "name": "Fluid Modern",
+  "width": 480,
+  "height": 480,
+  "background": { "color": "#0B101E" },
+  "widgets": [
+    {
+      "type": "clock",
+      "x": 240,
+      "y": 30,
+      "format": "%H:%M",
+      "size": 76,
+      "bold": true,
+      "align": "center",
+      "color": "#FFFFFF"
+    },
+    {
+      "type": "clock",
+      "x": 240,
+      "y": 105,
+      "format": "%A, %d %B",
+      "size": 18,
+      "align": "center",
+      "color": "#94A3B8"
+    },
+
+    {
+      "type": "gauge",
+      "cx": 130,
+      "cy": 250,
+      "r": 86,
+      "value": "cpu.usage",
+      "fg": "#00E5FF",
+      "bg": "#1E293B",
+      "thickness": 14,
+      "cap": "round"
+    },
+    {
+      "type": "text",
+      "x": 130,
+      "y": 215,
+      "text": "{cpu.usage}%",
+      "size": 40,
+      "bold": true,
+      "align": "center",
+      "color": "#FFFFFF"
+    },
+    {
+      "type": "text",
+      "x": 130,
+      "y": 260,
+      "text": "CPU",
+      "size": 14,
+      "align": "center",
+      "color": "#94A3B8"
+    },
+    {
+      "type": "text",
+      "x": 130,
+      "y": 335,
+      "text": "{cpu.temp}°C",
+      "size": 24,
+      "bold": true,
+      "align": "center",
+      "color": "#00E5FF"
+    },
+
+    {
+      "type": "gauge",
+      "cx": 350,
+      "cy": 250,
+      "r": 86,
+      "value": "gpu0.usage",
+      "fg": "#FF2A6D",
+      "bg": "#1E293B",
+      "thickness": 14,
+      "cap": "round"
+    },
+    {
+      "type": "text",
+      "x": 350,
+      "y": 215,
+      "text": "{gpu0.usage}%",
+      "size": 40,
+      "bold": true,
+      "align": "center",
+      "color": "#FFFFFF"
+    },
+    {
+      "type": "text",
+      "x": 350,
+      "y": 260,
+      "text": "GPU",
+      "size": 14,
+      "align": "center",
+      "color": "#94A3B8"
+    },
+    {
+      "type": "text",
+      "x": 350,
+      "y": 335,
+      "text": "{gpu0.temp}°C",
+      "size": 24,
+      "bold": true,
+      "align": "center",
+      "color": "#FF2A6D"
+    },
+
+    {
+      "type": "text",
+      "x": 40,
+      "y": 390,
+      "text": "RAM",
+      "size": 14,
+      "bold": true,
+      "color": "#94A3B8"
+    },
+    {
+      "type": "text",
+      "x": 440,
+      "y": 390,
+      "text": "{mem.used_gb:.1} / {mem.total_gb:.0} GB",
+      "size": 16,
+      "bold": true,
+      "align": "right",
+      "color": "#E2E8F0"
+    },
+    {
+      "type": "bar",
+      "x": 40,
+      "y": 415,
+      "w": 400,
+      "h": 12,
+      "value": "mem.used",
+      "fg": "#7C3AED",
+      "bg": "#1E293B",
+      "radius": 6
+    },
+
+    {
+      "type": "text",
+      "x": 40,
+      "y": 445,
+      "text": "↓ {net.down:rate}",
+      "size": 14,
+      "color": "#00E5FF"
+    },
+    {
+      "type": "text",
+      "x": 440,
+      "y": 445,
+      "text": "↑ {net.up:rate}",
+      "size": 14,
+      "align": "right",
+      "color": "#FF2A6D"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+[Unit]
+Description=SL360 XE LCD monitor (slxd)
+After=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/slxd --theme %h/.config/slxd/themes/aqua.json --brightness 60
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

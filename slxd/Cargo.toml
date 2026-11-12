@@ -1,0 +1,12 @@
+[package]
+name = "slxd"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "Daemon that draws a theme with live sensor data on the ID-Cooling SL360 XE LCD"
+
+[dependencies]
+lcd-core = { path = "../lcd-core" }
+sensors = { path = "../sensors" }
+renderer = { path = "../renderer" }
+libc = "0.2"

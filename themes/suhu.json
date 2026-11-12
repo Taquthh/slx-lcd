@@ -1,0 +1,24 @@
+{
+  "name": "Suhu",
+  "width": 480,
+  "height": 480,
+  "background": { "color": "#070d18" },
+  "widgets": [
+    { "type": "clock", "x": 240, "y": 24, "format": "%H:%M", "size": 40, "bold": true, "align": "center", "color": "#e8f6ff" },
+
+    { "type": "gauge", "cx": 130, "cy": 230, "r": 92, "value": "cpu.temp", "min": 20, "max": 100, "fg": "#2ee6c5", "thickness": 18 },
+    { "type": "text", "x": 130, "y": 190, "text": "{cpu.temp}°", "size": 58, "bold": true, "align": "center", "color": "#ffffff" },
+    { "type": "text", "x": 130, "y": 258, "text": "CPU", "size": 18, "align": "center", "color": "#7fa6bd" },
+    { "type": "text", "x": 130, "y": 320, "text": "{cpu.usage}%", "size": 22, "bold": true, "align": "center", "color": "#2ee6c5" },
+    { "type": "bar", "x": 40, "y": 366, "w": 180, "h": 10, "value": "cpu.usage", "fg": "#2ee6c5", "radius": 5 },
+
+    { "type": "gauge", "cx": 350, "cy": 230, "r": 92, "value": "gpu0.temp", "min": 20, "max": 100, "fg": "#ff9f43", "thickness": 18 },
+    { "type": "text", "x": 350, "y": 190, "text": "{gpu0.temp}°", "size": 58, "bold": true, "align": "center", "color": "#ffffff" },
+    { "type": "text", "x": 350, "y": 258, "text": "GPU", "size": 18, "align": "center", "color": "#7fa6bd" },
+    { "type": "text", "x": 350, "y": 320, "text": "{gpu0.usage}%", "size": 22, "bold": true, "align": "center", "color": "#ff9f43" },
+    { "type": "bar", "x": 260, "y": 366, "w": 180, "h": 10, "value": "gpu0.usage", "fg": "#ff9f43", "radius": 5 },
+
+    { "type": "text", "x": 130, "y": 392, "text": "beban", "size": 14, "align": "center", "color": "#5c7f95" },
+    { "type": "text", "x": 350, "y": 392, "text": "beban", "size": 14, "align": "center", "color": "#5c7f95" }
+  ]
+}

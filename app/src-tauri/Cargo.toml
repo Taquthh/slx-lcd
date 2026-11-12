@@ -1,0 +1,20 @@
+[package]
+name = "slx-lcd-app"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+
+# Deliberately NOT part of the parent workspace: it needs webkit2gtk (Linux GUI libraries).
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+sensors = { path = "../../sensors" }
+renderer = { path = "../../renderer" }
+lcd-core = { path = "../../lcd-core" }

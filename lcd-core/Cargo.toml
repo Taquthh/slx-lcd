@@ -1,0 +1,12 @@
+[package]
+name = "lcd-core"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "Protocol core for Turing Rev C compatible LCDs (ID-Cooling SL360 XE 2.1in, 480x480)"
+
+[dependencies]
+serialport = { version = "4", default-features = false }
+thiserror = "1"
+
+[dev-dependencies]
