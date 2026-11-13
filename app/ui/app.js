@@ -7,7 +7,6 @@ const MAX_MEDIA_FRAMES = 12;
 let theme = null;
 let currentThemeKey = "aqua";
 let selectedWidget = -1;
-let mediaPurpose = "widget";
 let daemonActive = false;
 let previewBusy = false;
 let previewQueued = false;
@@ -43,11 +42,6 @@ function dims() {
   };
 }
 
-function activateEditor() {
-  document.body.classList.add("editor-active");
-  window.scrollTo(0, 0);
-}
-
 function serializableTheme() {
   return JSON.stringify(theme, null, 2);
 }
@@ -62,7 +56,7 @@ function queuePreview(force = true) {
 }
 
 async function renderPreview(force = false) {
-  if (!theme || (!daemonActive && !document.body.classList.contains("editor-active") && !force)) return;
+  if (!theme || (!daemonActive && !force)) return;
   if (previewBusy) {
     previewQueued = previewQueued || force;
     return;
@@ -94,22 +88,9 @@ function widgetBounds(widget) {
     return { x: widget.cx - widget.r, y: widget.cy - widget.r, w: widget.r * 2, h: widget.r * 2 };
   }
   if (widget.type === "text" || widget.type === "clock") {
-    let text = widget.type === "text" ? widget.text || "Teks" : widget.format || "%H:%M";
-    if (widget.type === "clock") {
-      text = text.replace(/%([A-Za-z])/g, (_, token) => ({ H: "00", M: "00", S: "00", d: "00", Y: "2026", a: "Wed", A: "Wednesday", b: "Jan", B: "January" })[token] || "00");
-    } else {
-      text = text.replace(/\{([^}:]+)(?::([^}]+))?\}/g, (_, _path, format) => {
-        if (format === "rate") return "100 MB/s";
-        if (format === "bytes") return "100 GB";
-        if (format?.startsWith(".")) return `100.${"0".repeat(Math.min(3, Number(format.slice(1)) || 0))}`;
-        return "100";
-      });
-    }
+    const text = widget.type === "text" ? widget.text || "Teks" : "00:00";
     const size = Number(widget.size) || 24;
-    const width = Math.max(40, text.length * size * 0.6);
-    const anchorX = Number(widget.x) || 0;
-    const x = widget.align === "center" ? anchorX - width / 2 : widget.align === "right" ? anchorX - width : anchorX;
-    return { x, y: widget.y, w: width, h: Math.max(24, size * 1.35) };
+    return { x: widget.x, y: widget.y, w: Math.max(40, text.length * size * 0.62), h: Math.max(24, size * 1.35) };
   }
   return { x: widget.x, y: widget.y, w: Number(widget.w) || 100, h: Number(widget.h) || 60 };
 }
@@ -127,8 +108,8 @@ function renderOverlay() {
     button.setAttribute("aria-pressed", String(selectedWidget === index));
     button.style.left = `${box.x / width * 100}%`;
     button.style.top = `${box.y / height * 100}%`;
-    button.style.width = `${Math.max(1, box.w / width * 100)}%`;
-    button.style.height = `${Math.max(1, box.h / height * 100)}%`;
+    button.style.width = `${Math.max(8, box.w / width * 100)}%`;
+    button.style.height = `${Math.max(8, box.h / height * 100)}%`;
     const tag = document.createElement("span");
     tag.className = "widget-tag";
     tag.textContent = widgetName(widget);
@@ -257,10 +238,9 @@ function renderInspector() {
     actions.className = "inspector-actions";
     const remove = document.createElement("button");
     remove.type = "button";
-    remove.className = "delete-widget-button";
-    remove.textContent = "Hapus komponen";
-    remove.title = "Hapus komponen yang sedang dipilih";
-    remove.setAttribute("aria-label", "Hapus komponen yang dipilih");
+    remove.textContent = "×";
+    remove.title = "Hapus layer";
+    remove.setAttribute("aria-label", "Hapus layer terpilih");
     remove.onclick = () => {
       theme.widgets.splice(selectedWidget, 1);
       selectedWidget = -1;
@@ -338,7 +318,6 @@ function renderSelection() {
 }
 
 function updateModel(renderInspectorToo = true) {
-  syncBackgroundControls();
   renderLayers();
   renderOverlay();
   if (renderInspectorToo) renderInspector();
@@ -347,14 +326,6 @@ function updateModel(renderInspectorToo = true) {
 }
 
 function defaultWidget(type, x, y) {
-  const presets = {
-    "cpu-metric": { type: "text", x, y, text: "CPU {cpu.usage}%", size: 27, color: "#25e0cc", bold: true, align: "left" },
-    "ram-metric": { type: "text", x, y, text: "RAM {mem.used}%", size: 27, color: "#9775ff", bold: true, align: "left" },
-    "network-metric": { type: "text", x, y, text: "↓ {net.down:rate}", size: 20, color: "#edf3fa", bold: true, align: "left" },
-    divider: { type: "rect", x, y, w: 160, h: 2, radius: 1, color: "#40536a" },
-    panel: { type: "rect", x, y, w: 190, h: 112, radius: 16, color: "#17263a" },
-  };
-  if (presets[type]) return structuredClone(presets[type]);
   const common = { text: { type: "text", x, y, text: "Teks baru", size: 30, color: "#edf3fa", bold: true, align: "left" },
     rect: { type: "rect", x, y, w: 120, h: 78, radius: 12, color: "#25e0cc" },
     bar: { type: "bar", x, y, w: 190, h: 15, value: "cpu.usage", min: 0, max: 100, fg: "#25e0cc", bg: "#243246", radius: 7 },
@@ -372,7 +343,7 @@ function addWidget(type, x, y) {
 }
 
 function stagePoint(event) {
-  const rect = $("widget-layer").getBoundingClientRect();
+  const rect = $("stage").getBoundingClientRect();
   const { width, height } = dims();
   return { x: (event.clientX - rect.left) / rect.width * width, y: (event.clientY - rect.top) / rect.height * height };
 }
@@ -437,14 +408,9 @@ $("stage").addEventListener("drop", async (event) => {
   if (type) addWidget(type, point.x, point.y);
 });
 
-function syncBackgroundControls() {
-  $("clear-background-media").hidden = !(theme?.background?.image || theme?.background?.frames?.length);
-}
-
 function renderAll() {
   $("theme-name").value = theme.name || currentThemeKey;
   $("background-color").value = theme.background?.color || "#0b101e";
-  syncBackgroundControls();
   renderLayers();
   renderOverlay();
   renderInspector();
@@ -461,110 +427,6 @@ function normalizeTheme(value) {
   return value;
 }
 
-function setFeaturedTheme(item) {
-  const image = $("featured-theme-preview");
-  const empty = $("featured-preview-empty");
-  if (!item?.image) {
-    image.hidden = true;
-    empty.hidden = false;
-    $("featured-theme-name").textContent = "Belum ada tema tersimpan";
-    $("featured-theme-size").textContent = "480 × 480";
-    return;
-  }
-  image.src = item.image;
-  image.hidden = false;
-  empty.hidden = true;
-  $("featured-theme-name").textContent = item.title;
-  $("featured-theme-size").textContent = `${item.width} × ${item.height}`;
-}
-
-function showThemePreview(item) {
-  if (!item.image) return toast("Pratinjau tema ini tidak tersedia.", true);
-  $("dialog-theme-name").textContent = item.title;
-  $("dialog-theme-image").src = item.image;
-  $("dialog-theme-dimensions").textContent = `${item.width} × ${item.height} px`;
-  $("dialog-theme-components").textContent = `${item.components} komponen`;
-  $("dialog-edit-theme").dataset.theme = item.key;
-  $("theme-preview-dialog").showModal();
-}
-
-async function renderThemeGallery(names) {
-  const gallery = $("theme-gallery");
-  const items = await Promise.all(names.map(async (key) => {
-    try {
-      const source = await invoke("read_theme", { name: key });
-      const definition = normalizeTheme(JSON.parse(source));
-      const image = await invoke("preview", { themeJson: source });
-      return { key, title: definition.name || key, width: definition.width, height: definition.height, components: definition.widgets.length, image };
-    } catch (_) {
-      return { key, title: key, width: 480, height: 480, components: 0, image: "" };
-    }
-  }));
-
-  gallery.replaceChildren(...items.map((item) => {
-    const card = document.createElement("article");
-    card.className = "theme-card";
-    card.dataset.searchText = `${item.title} ${item.key}`.toLowerCase();
-    const previewButton = document.createElement("button");
-    previewButton.type = "button";
-    previewButton.className = "theme-card-preview";
-    previewButton.setAttribute("aria-label", `Lihat pratinjau ${item.title}`);
-    const imageFrame = document.createElement("span");
-    imageFrame.className = "theme-card-device";
-    if (item.image) {
-      const image = document.createElement("img");
-      image.src = item.image;
-      image.alt = `Tampilan tema ${item.title}`;
-      imageFrame.append(image);
-    } else {
-      imageFrame.textContent = "Preview tidak tersedia";
-    }
-    const previewHint = document.createElement("span");
-    previewHint.className = "theme-card-preview-hint";
-    previewHint.textContent = "Lihat pratinjau";
-    previewButton.append(imageFrame, previewHint);
-    previewButton.addEventListener("mouseenter", () => setFeaturedTheme(item));
-    previewButton.addEventListener("focus", () => setFeaturedTheme(item));
-    previewButton.addEventListener("click", () => {
-      setFeaturedTheme(item);
-      showThemePreview(item);
-    });
-
-    const details = document.createElement("div");
-    details.className = "theme-card-details";
-    const copy = document.createElement("div");
-    const title = document.createElement("h3");
-    title.textContent = item.title;
-    const meta = document.createElement("p");
-    meta.textContent = `${item.width} × ${item.height} · ${item.components} komponen`;
-    copy.append(title, meta);
-    const editButton = document.createElement("button");
-    editButton.type = "button";
-    editButton.className = "theme-card-edit";
-    editButton.textContent = "Edit tema";
-    editButton.addEventListener("click", () => loadTheme(item.key).catch((error) => toast(String(error), true)));
-    details.append(copy, editButton);
-    card.append(previewButton, details);
-    return card;
-  }));
-  $("home-theme-count").textContent = `${names.length} tema tersimpan`;
-  $("theme-gallery-empty").hidden = names.length > 0;
-  $("theme-gallery-no-results").hidden = true;
-  setFeaturedTheme(items.find((item) => item.image) || items[0]);
-  applyThemeSearch();
-}
-
-function applyThemeSearch() {
-  const query = $("theme-search").value.trim().toLowerCase();
-  const cards = [...$("theme-gallery").children];
-  let visible = 0;
-  for (const card of cards) {
-    card.hidden = Boolean(query) && !card.dataset.searchText.includes(query);
-    if (!card.hidden) visible += 1;
-  }
-  $("theme-gallery-no-results").hidden = !query || visible > 0 || cards.length === 0;
-}
-
 async function refreshThemeList(select) {
   const names = await invoke("list_themes");
   const selectEl = $("theme-select");
@@ -575,7 +437,6 @@ async function refreshThemeList(select) {
     return option;
   }));
   if (select && names.includes(select)) selectEl.value = select;
-  if (!document.body.classList.contains("editor-active")) await renderThemeGallery(names);
   return names;
 }
 
@@ -584,7 +445,6 @@ async function loadTheme(key, preview = true) {
   theme = normalizeTheme(JSON.parse(source));
   currentThemeKey = key;
   selectedWidget = -1;
-  activateEditor();
   await refreshThemeList(key);
   renderAll();
   if (!preview) return;
@@ -668,9 +528,8 @@ function startPolling() {
 
 async function applyTheme() {
   const key = await saveTheme();
-  const backgroundFps = theme.background?.frames?.length > 1 ? Number(theme.background.fps) || MEDIA_FPS : 1;
   const animatedFps = (theme.widgets || []).filter((item) => item.type === "image" && item.frames?.length > 1)
-    .reduce((fps, item) => Math.max(fps, Number(item.fps) || MEDIA_FPS), backgroundFps);
+    .reduce((fps, item) => Math.max(fps, Number(item.fps) || MEDIA_FPS), 1);
   await invoke("daemon_stop");
   await invoke("daemon_start", {
     theme: key,
@@ -690,6 +549,7 @@ async function applyTheme() {
 async function stopTheme() {
   await invoke("daemon_stop");
   daemonActive = false;
+  clearInterval(previewTimer);
   clearInterval(statsTimer);
   await updateState();
   renderStats(null);
@@ -710,16 +570,19 @@ function downloadJson() {
 }
 
 function createDefaultTheme() {
-  currentThemeKey = "tema-baru";
+  const key = "untitled-theme";
+  currentThemeKey = key;
   theme = {
     name: "Tema baru",
     width: CANVAS_SIZE,
     height: CANVAS_SIZE,
-    background: { color: "#0b101e", image: null, frames: [], fps: MEDIA_FPS },
-    widgets: [],
+    background: { color: "#0b101e" },
+    widgets: [
+      { type: "clock", x: 240, y: 44, format: "%H:%M", size: 56, color: "#edf3fa", bold: true, align: "center" },
+      { type: "text", x: 240, y: 274, text: "CPU {cpu.usage}%", size: 24, color: "#25e0cc", bold: true, align: "center" },
+    ],
   };
   selectedWidget = -1;
-  activateEditor();
   renderAll();
   $("theme-select").value = "";
 }
@@ -815,15 +678,6 @@ async function addMedia(file, x, y) {
     currentThemeKey = key;
     if (!$("theme-name").value.trim()) $("theme-name").value = key;
     const paths = await invoke("save_media_frames", { theme: key, filename: file.name, frames: captured.frames });
-    if (mediaPurpose === "background") {
-      theme.background = theme.background || {};
-      theme.background.image = paths[0];
-      theme.background.frames = paths;
-      theme.background.fps = paths.length > 1 ? MEDIA_FPS : 1;
-      updateModel(false);
-      toast(`${paths.length > 1 ? "Latar animasi" : "Gambar latar"} diterapkan.`);
-      return;
-    }
     const scale = Math.min(1, 280 / captured.width, 220 / captured.height);
     const w = Math.max(40, Math.round(captured.width * scale));
     const h = Math.max(40, Math.round(captured.height * scale));
@@ -838,21 +692,9 @@ async function addMedia(file, x, y) {
   }
 }
 
-function openMediaPicker() {
-  mediaPurpose = "widget";
-  $("media-input").click();
-}
+function openMediaPicker() { $("media-input").click(); }
 $("add-media").onclick = openMediaPicker;
 $("media-drop").onclick = openMediaPicker;
-$("background-media").onclick = () => {
-  mediaPurpose = "background";
-  $("media-input").click();
-};
-$("clear-background-media").onclick = () => {
-  theme.background = { ...(theme.background || {}), image: null, frames: [] };
-  updateModel(false);
-  toast("Media latar dihapus.");
-};
 $("media-input").addEventListener("change", (event) => {
   const file = event.target.files[0];
   if (file) addMedia(file);
@@ -870,30 +712,10 @@ $("theme-name").addEventListener("input", () => {
 $("background-color").addEventListener("input", (event) => {
   theme.background = theme.background || {};
   theme.background.color = event.target.value;
-  theme.background.image = null;
-  theme.background.frames = [];
-  updateModel(false);
+  updateSource();
+  queuePreview(true);
 });
-$("create-theme-start").onclick = createDefaultTheme;
 $("new-theme").onclick = createDefaultTheme;
-$("import-json-start").onclick = () => $("json-input").click();
-$("theme-search").addEventListener("input", applyThemeSearch);
-$("close-theme-preview").onclick = () => $("theme-preview-dialog").close();
-$("dialog-edit-theme").onclick = () => {
-  const key = $("dialog-edit-theme").dataset.theme;
-  $("theme-preview-dialog").close();
-  if (key) loadTheme(key).catch((error) => toast(String(error), true));
-};
-$("home-link").addEventListener("click", async (event) => {
-  event.preventDefault();
-  if (!window.confirm("Kembali ke daftar tema? Simpan perubahan terlebih dahulu jika ingin menyimpannya.")) return;
-  document.body.classList.remove("editor-active");
-  window.scrollTo(0, 0);
-  theme = null;
-  selectedWidget = -1;
-  try { await refreshThemeList(); }
-  catch (error) { toast(String(error), true); }
-});
 $("save-theme").onclick = () => saveTheme().catch((error) => toast(String(error), true));
 $("apply-theme").onclick = () => applyTheme().catch((error) => toast(String(error), true));
 $("stop-theme").onclick = () => stopTheme().catch((error) => toast(String(error), true));
@@ -920,7 +742,6 @@ $("json-input").addEventListener("change", async (event) => {
     theme = normalizeTheme(JSON.parse(await file.text()));
     currentThemeKey = slug(file.name.replace(/\.json$/i, "")) || "imported-theme";
     selectedWidget = -1;
-    activateEditor();
     await refreshThemeList();
     renderAll();
     toast("Tema JSON dibuka. Simpan untuk menambahkannya ke daftar tema.");
@@ -944,12 +765,20 @@ async function init() {
     $("brightness-value").value = `${settings.brightness}%`;
     $("orientation").value = settings.orientation;
     $("start-on-boot").checked = settings.startOnBoot;
-    await refreshThemeList();
-    await updateState();
+    const names = await refreshThemeList();
+    if (!names.length) {
+      createDefaultTheme();
+      await refreshPorts();
+      renderStats(null);
+      return;
+    }
+    const selected = names.includes(settings.lastTheme) ? settings.lastTheme : names[0];
+    await loadTheme(selected);
+    if (await invoke("daemon_running")) await stopTheme();
+    await applyTheme();
     await refreshPorts();
     await refreshStats();
     setInterval(updateState, 1800);
-    previewTimer = setInterval(() => renderPreview(), 500);
   } catch (error) {
     toast(String(error), true);
   }

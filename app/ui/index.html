@@ -7,22 +7,8 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<main id="home-screen" class="home-screen" aria-labelledby="home-title">
-  <header class="home-topbar">
-    <a class="home-brand" href="#home-screen" aria-label="SLX Studio home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span><strong>SLX</strong><small>STUDIO</small></span></a>
-    <div class="home-topbar-meta"><span class="home-status-dot"></span><span>LCD THEME STUDIO</span></div>
-    <div class="home-actions"><button id="import-json-start" class="quiet-button" type="button">Impor JSON</button><button id="create-theme-start" class="primary-button" type="button"><span aria-hidden="true">＋</span> Buat tema</button></div>
-  </header>
-  <section class="home-hero">
-    <div class="home-hero-copy"><span class="eyebrow">RUANG KERJA DESAIN LCD</span><h1 id="home-title">Rancang tampilan.<br><span>Lihat hasilnya.</span></h1><p>Pilih tema untuk melanjutkan, lihat pratinjau sebelum mengedit, atau mulai kanvas baru sesuai keinginan.</p><div class="home-hero-meta"><span class="hero-meta-dot"></span><span id="home-theme-count">0 tema tersimpan</span><span class="meta-divider"></span><span>SL360 XE · ROUND LCD</span></div></div>
-    <div class="featured-preview-card"><div class="featured-preview-header"><span><i class="home-status-dot"></i> PRATINJAU TEMA</span><span id="featured-theme-size">480 × 480</span></div><div class="featured-device"><div class="featured-device-inner"><img id="featured-theme-preview" alt="Pratinjau tema pilihan" hidden><div id="featured-preview-empty"><span class="preview-crosshair" aria-hidden="true">+</span><strong>Pilih tema untuk melihat tampilannya</strong></div></div></div><div class="featured-preview-footer"><span id="featured-theme-name">Belum ada tema tersimpan</span><span class="featured-live"><i></i> PREVIEW</span></div></div>
-  </section>
-  <section class="home-gallery-section" aria-labelledby="gallery-title"><div class="gallery-heading"><div><span class="eyebrow">LIBRARY</span><h2 id="gallery-title">Tema Anda</h2><p>Pilih tema untuk melihat pratinjau atau langsung mengeditnya.</p></div><label class="theme-search"><span class="sr-only">Cari tema</span><span aria-hidden="true">⌕</span><input id="theme-search" type="search" placeholder="Cari tema…" autocomplete="off"></label></div><div id="theme-gallery" class="theme-gallery" aria-live="polite"></div><div id="theme-gallery-empty" class="gallery-empty" hidden><span class="gallery-empty-icon">＋</span><strong>Belum ada tema tersimpan</strong><p>Buat tema baru atau impor file JSON untuk memulai koleksi Anda.</p><button class="quiet-button" type="button" onclick="document.getElementById('create-theme-start').click()">Buat tema pertama</button></div><div id="theme-gallery-no-results" class="gallery-empty" hidden><strong>Tema tidak ditemukan</strong><p>Coba kata kunci lain.</p></div></section>
-  <footer class="home-footer"><span>SLX STUDIO <i>•</i> TEMA LCD ANDA, KENDALI ANDA</span><span>Pratinjau tidak mengirim tema ke perangkat.</span></footer>
-</main>
-<dialog id="theme-preview-dialog" class="theme-preview-dialog" aria-labelledby="dialog-theme-name"><div class="theme-preview-dialog-card"><header><div><span class="eyebrow">PRATINJAU TEMA</span><h2 id="dialog-theme-name">Tema</h2></div><button id="close-theme-preview" class="quiet-button" type="button">Tutup</button></header><div class="dialog-preview-device"><img id="dialog-theme-image" alt="Pratinjau tema LCD"></div><div class="dialog-preview-meta"><span id="dialog-theme-dimensions"></span><span id="dialog-theme-components"></span></div><button id="dialog-edit-theme" class="primary-button" type="button">Edit tema ini</button></div></dialog>
 <header class="topbar">
-  <a id="home-link" class="brand" href="#home-screen" aria-label="Kembali ke tema">
+  <a class="brand" href="#" aria-label="SLX Studio home">
     <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
     <span><strong>SLX</strong><small>STUDIO</small></span>
   </a>
@@ -57,11 +43,6 @@
       <button class="tool-card" draggable="true" data-tool="bar"><span class="tool-icon bar-icon"><i></i></span><span>Progress</span></button>
       <button class="tool-card" draggable="true" data-tool="gauge"><span class="tool-icon gauge-icon">◔</span><span>Gauge</span></button>
       <button class="tool-card" draggable="true" data-tool="clock"><span class="tool-icon clock-icon">◷</span><span>Jam</span></button>
-      <button class="tool-card" draggable="true" data-tool="cpu-metric"><span class="tool-icon metric-icon">%</span><span>Metrik CPU</span></button>
-      <button class="tool-card" draggable="true" data-tool="ram-metric"><span class="tool-icon metric-icon">▤</span><span>Metrik RAM</span></button>
-      <button class="tool-card" draggable="true" data-tool="network-metric"><span class="tool-icon metric-icon">↕</span><span>Jaringan</span></button>
-      <button class="tool-card" draggable="true" data-tool="divider"><span class="tool-icon divider-icon"></span><span>Pemisah</span></button>
-      <button class="tool-card" draggable="true" data-tool="panel"><span class="tool-icon rect-icon"></span><span>Kartu</span></button>
     </div>
     <button id="media-drop" class="media-drop" type="button">
       <span class="media-symbol" aria-hidden="true">↥</span>
@@ -91,12 +72,9 @@
       <div class="stage-caption"><span>SL360 XE · ROUND LCD</span><span id="selection-label">Belum ada layer dipilih</span></div>
     </div>
     <div class="canvas-bottom">
-      <div class="background-control">
-        <label for="background-color">Warna latar</label>
+      <label class="background-control">Latar
         <input id="background-color" type="color" value="#0b101e" aria-label="Warna latar tema">
-        <button id="background-media" class="quiet-button background-media-button" type="button">Pilih gambar/video</button>
-        <button id="clear-background-media" class="quiet-button clear-background-button" type="button" aria-label="Hapus media latar" title="Hapus media latar">Hapus latar</button>
-      </div>
+      </label>
       <label class="brightness-control" for="brightness">Kecerahan
         <input id="brightness" type="range" min="0" max="100" value="60">
         <output id="brightness-value" for="brightness">60%</output>

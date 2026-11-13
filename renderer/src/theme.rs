@@ -173,16 +173,11 @@ pub struct Background {
     /// PNG path (relative to the theme file), stretched to the canvas
     #[serde(default)]
     pub image: Option<String>,
-    /// Optional PNG frames for an animated image or video background
-    #[serde(default)]
-    pub frames: Vec<String>,
-    #[serde(default = "d_media_fps")]
-    pub fps: f32,
 }
 
 impl Default for Background {
     fn default() -> Self {
-        Background { color: Some(Color(8, 12, 20, 255)), image: None, frames: Vec::new(), fps: d_media_fps() }
+        Background { color: Some(Color(8, 12, 20, 255)), image: None }
     }
 }
 

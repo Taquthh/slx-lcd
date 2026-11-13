@@ -35,7 +35,7 @@ pub enum RenderError {
 
 pub struct Renderer {
     pub theme: Theme,
-    background: Vec<Pixmap>,
+    background: Option<Pixmap>,
     images: Vec<Option<Vec<Pixmap>>>, // parallel to theme.widgets
     regular: FontRef<'static>,
     bold: FontRef<'static>,
@@ -69,15 +69,10 @@ impl Renderer {
             }
             Pixmap::load_png(&path).map_err(|error| RenderError::Image(path, error.to_string()))
         };
-        let background_paths: Vec<&str> = if theme.background.frames.is_empty() {
-            theme.background.image.iter().map(String::as_str).collect()
-        } else {
-            theme.background.frames.iter().map(String::as_str).collect()
+        let background = match &theme.background.image {
+            Some(rel) => Some(load(rel)?),
+            None => None,
         };
-        let mut background = Vec::with_capacity(background_paths.len());
-        for path in background_paths {
-            background.push(load(path)?);
-        }
         let mut images = Vec::with_capacity(theme.widgets.len());
         for w in &theme.widgets {
             images.push(match w {
@@ -128,13 +123,7 @@ impl Renderer {
         if let Some(c) = self.theme.background.color {
             pm.fill(to_sk(c));
         }
-        if !self.background.is_empty() {
-            let frame_index = if self.background.len() > 1 {
-                ((now_ms as f64 / 1000.0 * self.theme.background.fps.clamp(0.2, 10.0) as f64).floor() as usize) % self.background.len()
-            } else {
-                0
-            };
-            let bg = &self.background[frame_index];
+        if let Some(bg) = &self.background {
             let sx = w as f32 / bg.width() as f32;
             let sy = h as f32 / bg.height() as f32;
             pm.draw_pixmap(0, 0, bg.as_ref(), &PixmapPaint::default(), Transform::from_scale(sx, sy), None);
