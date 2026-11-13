@@ -6,6 +6,9 @@ const MAX_MEDIA_FRAMES = 12;
 
 let theme = null;
 let currentThemeKey = "aqua";
+let featuredThemeKey = "";
+let preferredThemeKey = "";
+let lastAppliedThemeKey = "";
 let selectedWidget = -1;
 let mediaPurpose = "widget";
 let daemonActive = false;
@@ -464,6 +467,9 @@ function normalizeTheme(value) {
 function setFeaturedTheme(item) {
   const image = $("featured-theme-preview");
   const empty = $("featured-preview-empty");
+  featuredThemeKey = item?.key || "";
+  $("featured-apply-theme").disabled = !featuredThemeKey;
+  $("featured-edit-theme").disabled = !featuredThemeKey;
   if (!item?.image) {
     image.hidden = true;
     empty.hidden = false;
@@ -538,19 +544,29 @@ async function renderThemeGallery(names) {
     const meta = document.createElement("p");
     meta.textContent = `${item.width} × ${item.height} · ${item.components} komponen`;
     copy.append(title, meta);
+    const actions = document.createElement("div");
+    actions.className = "theme-card-actions";
+    const loadButton = document.createElement("button");
+    loadButton.type = "button";
+    loadButton.className = "theme-card-load";
+    loadButton.textContent = "Muat ke LCD";
+    loadButton.addEventListener("click", () => applySavedTheme(item.key).catch((error) => toast(String(error), true)));
     const editButton = document.createElement("button");
     editButton.type = "button";
     editButton.className = "theme-card-edit";
     editButton.textContent = "Edit tema";
     editButton.addEventListener("click", () => loadTheme(item.key).catch((error) => toast(String(error), true)));
-    details.append(copy, editButton);
+    actions.append(loadButton, editButton);
+    details.append(copy, actions);
     card.append(previewButton, details);
     return card;
   }));
-  $("home-theme-count").textContent = `${names.length} tema tersimpan`;
+  $("home-theme-count").textContent = String(names.length);
+  $("home-library-status").textContent = names.length ? `${names.length} tema tersimpan · perangkat siap dikonfigurasi` : "Belum ada tema tersimpan";
   $("theme-gallery-empty").hidden = names.length > 0;
   $("theme-gallery-no-results").hidden = true;
-  setFeaturedTheme(items.find((item) => item.image) || items[0]);
+  setFeaturedTheme(items.find((item) => item.key === preferredThemeKey) || items.find((item) => item.image) || items[0]);
+  preferredThemeKey = "";
   applyThemeSearch();
 }
 
@@ -565,16 +581,8 @@ function applyThemeSearch() {
   $("theme-gallery-no-results").hidden = !query || visible > 0 || cards.length === 0;
 }
 
-async function refreshThemeList(select) {
+async function refreshThemeList() {
   const names = await invoke("list_themes");
-  const selectEl = $("theme-select");
-  selectEl.replaceChildren(...names.map((name) => {
-    const option = document.createElement("option");
-    option.value = name;
-    option.textContent = name;
-    return option;
-  }));
-  if (select && names.includes(select)) selectEl.value = select;
   if (!document.body.classList.contains("editor-active")) await renderThemeGallery(names);
   return names;
 }
@@ -583,9 +591,10 @@ async function loadTheme(key, preview = true) {
   const source = await invoke("read_theme", { name: key });
   theme = normalizeTheme(JSON.parse(source));
   currentThemeKey = key;
+  $("studio-theme-name").textContent = theme.name || key;
   selectedWidget = -1;
   activateEditor();
-  await refreshThemeList(key);
+  await refreshThemeList();
   renderAll();
   if (!preview) return;
   await renderPreview(true);
@@ -608,7 +617,7 @@ async function saveTheme() {
   return key;
 }
 
-async function saveSettings(lastTheme = currentThemeKey) {
+async function saveSettings(lastTheme = lastAppliedThemeKey || currentThemeKey) {
   await invoke("save_app_settings", {
     lastTheme,
     brightness: Number($("brightness")?.value || 60),
@@ -630,18 +639,33 @@ async function updateState() {
     daemonActive = active;
     $("status-dot").classList.toggle("online", active);
     $("connection-label").textContent = active ? "LCD aktif" : "LCD berhenti";
-    $("sensor-state").textContent = active ? "Pembaruan sensor aktif" : "Sensor berhenti saat LCD tidak aktif";
-    if (!active) renderStats(null);
+    $("home-device-dot").classList.toggle("is-offline", !active);
+    $("home-device-status").textContent = active ? "LCD AKTIF" : "LCD BERHENTI";
+    $("home-stop-theme").disabled = !active;
+    $("featured-live").textContent = active ? "LIVE" : "SIAP";
+    $("featured-live").classList.toggle("is-active", active);
+    $("sensor-state").textContent = active ? "LCD aktif · telemetry diperbarui langsung" : "Monitoring perangkat · LCD dalam kondisi siaga";
   } catch (error) { toast(String(error), true); }
+}
+
+function formatRate(value) {
+  if (!Number.isFinite(value)) return "--";
+  const units = ["B/s", "KB/s", "MB/s", "GB/s"];
+  let amount = Math.max(0, value);
+  let unit = 0;
+  while (amount >= 1024 && unit < units.length - 1) { amount /= 1024; unit += 1; }
+  return `${amount.toFixed(unit ? 1 : 0)} ${units[unit]}`;
 }
 
 function renderStats(snapshot) {
   const values = snapshot ? [
-    ["CPU", `${Math.round(snapshot.cpu.usage_percent)}%`],
-    ["CPU TEMP", snapshot.cpu.temp_c == null ? "--" : `${Math.round(snapshot.cpu.temp_c)}°`],
+    ["CPU LOAD", `${Math.round(snapshot.cpu.usage_percent)}%`],
+    ["CPU TEMP", snapshot.cpu.temp_c == null ? "--" : `${Math.round(snapshot.cpu.temp_c)}°C`],
+    ["GPU LOAD", snapshot.gpus[0]?.usage_percent == null ? "--" : `${Math.round(snapshot.gpus[0].usage_percent)}%`],
     ["RAM", `${Math.round(snapshot.mem.used_percent)}%`],
-    ["GPU", snapshot.gpus[0] ? `${Math.round(snapshot.gpus[0].usage_percent)}%` : "--"],
-  ] : [["CPU", "--"], ["CPU TEMP", "--"], ["RAM", "--"], ["GPU", "--"]];
+    ["NET ↓", formatRate(snapshot.net?.reduce((total, iface) => total + iface.rx_bytes_per_s, 0))],
+    ["NET ↑", formatRate(snapshot.net?.reduce((total, iface) => total + iface.tx_bytes_per_s, 0))],
+  ] : [["CPU LOAD", "--"], ["CPU TEMP", "--"], ["GPU LOAD", "--"], ["MEMORY", "--"], ["NET ↓", "--"], ["NET ↑", "--"]];
   $("stats").replaceChildren(...values.map(([label, value]) => {
     const card = document.createElement("div");
     card.className = "stat";
@@ -655,7 +679,6 @@ function renderStats(snapshot) {
 }
 
 async function refreshStats() {
-  if (!daemonActive) return renderStats(null);
   try { renderStats(await invoke("snapshot")); } catch (_) { renderStats(null); }
 }
 
@@ -679,6 +702,7 @@ async function applyTheme() {
     fps: animatedFps,
   });
   await saveSettings(key);
+  lastAppliedThemeKey = key;
   daemonActive = true;
   startPolling();
   await updateState();
@@ -687,13 +711,35 @@ async function applyTheme() {
   toast("Tema diterapkan ke LCD.");
 }
 
+async function applySavedTheme(key) {
+  const source = await invoke("read_theme", { name: key });
+  const selectedTheme = normalizeTheme(JSON.parse(source));
+  const backgroundFps = selectedTheme.background?.frames?.length > 1 ? Number(selectedTheme.background.fps) || MEDIA_FPS : 1;
+  const animatedFps = (selectedTheme.widgets || []).filter((item) => item.type === "image" && item.frames?.length > 1)
+    .reduce((fps, item) => Math.max(fps, Number(item.fps) || MEDIA_FPS), backgroundFps);
+  await invoke("daemon_stop");
+  await invoke("daemon_start", {
+    theme: key,
+    brightness: Number($("brightness").value),
+    orientation: $("orientation").value,
+    fps: animatedFps,
+  });
+  await saveSettings(key);
+  lastAppliedThemeKey = key;
+  daemonActive = true;
+  startPolling();
+  await updateState();
+  await refreshStats();
+  $("home-library-status").textContent = `Tema aktif · ${selectedTheme.name || key}`;
+  toast(`“${selectedTheme.name || key}” dimuat ke LCD.`);
+}
+
 async function stopTheme() {
   await invoke("daemon_stop");
   daemonActive = false;
-  clearInterval(statsTimer);
   await updateState();
-  renderStats(null);
-  toast("Pengiriman frame dan pembacaan sensor dihentikan.");
+  await refreshStats();
+  toast("Pengiriman tema dihentikan. Telemetry tetap aktif.");
 }
 
 function downloadJson() {
@@ -719,9 +765,9 @@ function createDefaultTheme() {
     widgets: [],
   };
   selectedWidget = -1;
+  $("studio-theme-name").textContent = theme.name;
   activateEditor();
   renderAll();
-  $("theme-select").value = "";
 }
 
 function isVideoFile(file) {
@@ -859,13 +905,12 @@ $("media-input").addEventListener("change", (event) => {
   event.target.value = "";
 });
 
-$("theme-select").addEventListener("change", async (event) => {
-  if (!event.target.value) return;
-  try { await loadTheme(event.target.value); }
-  catch (error) { toast(String(error), true); }
-});
 $("theme-name").addEventListener("input", () => {
-  if (theme) { theme.name = $("theme-name").value; updateSource(); }
+  if (theme) {
+    theme.name = $("theme-name").value;
+    $("studio-theme-name").textContent = theme.name || currentThemeKey;
+    updateSource();
+  }
 });
 $("background-color").addEventListener("input", (event) => {
   theme.background = theme.background || {};
@@ -875,8 +920,10 @@ $("background-color").addEventListener("input", (event) => {
   updateModel(false);
 });
 $("create-theme-start").onclick = createDefaultTheme;
-$("new-theme").onclick = createDefaultTheme;
 $("import-json-start").onclick = () => $("json-input").click();
+$("featured-apply-theme").onclick = () => featuredThemeKey && applySavedTheme(featuredThemeKey).catch((error) => toast(String(error), true));
+$("featured-edit-theme").onclick = () => featuredThemeKey && loadTheme(featuredThemeKey).catch((error) => toast(String(error), true));
+$("home-stop-theme").onclick = () => stopTheme().catch((error) => toast(String(error), true));
 $("theme-search").addEventListener("input", applyThemeSearch);
 $("close-theme-preview").onclick = () => $("theme-preview-dialog").close();
 $("dialog-edit-theme").onclick = () => {
@@ -884,9 +931,8 @@ $("dialog-edit-theme").onclick = () => {
   $("theme-preview-dialog").close();
   if (key) loadTheme(key).catch((error) => toast(String(error), true));
 };
-$("home-link").addEventListener("click", async (event) => {
-  event.preventDefault();
-  if (!window.confirm("Kembali ke daftar tema? Simpan perubahan terlebih dahulu jika ingin menyimpannya.")) return;
+$("home-link").addEventListener("click", async () => {
+  if (!window.confirm("Kembali ke halaman utama? Simpan perubahan terlebih dahulu jika ingin menyimpannya.")) return;
   document.body.classList.remove("editor-active");
   window.scrollTo(0, 0);
   theme = null;
@@ -912,13 +958,13 @@ $("apply-json").onclick = () => {
     toast("JSON diterapkan ke kanvas.");
   } catch (error) { toast(`JSON tidak valid: ${error.message}`, true); }
 };
-$("import-json").onclick = () => $("json-input").click();
 $("json-input").addEventListener("change", async (event) => {
   const file = event.target.files[0];
   if (!file) return;
   try {
     theme = normalizeTheme(JSON.parse(await file.text()));
     currentThemeKey = slug(file.name.replace(/\.json$/i, "")) || "imported-theme";
+    $("studio-theme-name").textContent = theme.name || currentThemeKey;
     selectedWidget = -1;
     activateEditor();
     await refreshThemeList();
@@ -929,7 +975,7 @@ $("json-input").addEventListener("change", async (event) => {
 });
 $("start-on-boot").addEventListener("change", async () => {
   try {
-    await saveSettings(currentThemeKey);
+    await saveSettings();
     toast($("start-on-boot").checked ? "Tema terakhir akan dimuat saat login." : "Autostart dimatikan.");
   } catch (error) { toast(String(error), true); }
 });
@@ -944,11 +990,14 @@ async function init() {
     $("brightness-value").value = `${settings.brightness}%`;
     $("orientation").value = settings.orientation;
     $("start-on-boot").checked = settings.startOnBoot;
+    preferredThemeKey = settings.lastTheme || "";
+    lastAppliedThemeKey = settings.lastTheme || "";
     await refreshThemeList();
     await updateState();
     await refreshPorts();
     await refreshStats();
     setInterval(updateState, 1800);
+    statsTimer = setInterval(refreshStats, 1800);
     previewTimer = setInterval(() => renderPreview(), 500);
   } catch (error) {
     toast(String(error), true);

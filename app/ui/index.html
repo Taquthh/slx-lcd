@@ -10,31 +10,32 @@
 <main id="home-screen" class="home-screen" aria-labelledby="home-title">
   <header class="home-topbar">
     <a class="home-brand" href="#home-screen" aria-label="SLX Studio home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span><strong>SLX</strong><small>STUDIO</small></span></a>
-    <div class="home-topbar-meta"><span class="home-status-dot"></span><span>LCD THEME STUDIO</span></div>
+    <div class="home-topbar-meta"><span id="home-device-dot" class="home-status-dot"></span><span id="home-device-status">LCD BERHENTI</span><span class="home-meta-divider"></span><span>SL360 XE · 480 × 480</span></div>
     <div class="home-actions"><button id="import-json-start" class="quiet-button" type="button">Impor JSON</button><button id="create-theme-start" class="primary-button" type="button"><span aria-hidden="true">＋</span> Buat tema</button></div>
   </header>
-  <section class="home-hero">
-    <div class="home-hero-copy"><span class="eyebrow">RUANG KERJA DESAIN LCD</span><h1 id="home-title">Rancang tampilan.<br><span>Lihat hasilnya.</span></h1><p>Pilih tema untuk melanjutkan, lihat pratinjau sebelum mengedit, atau mulai kanvas baru sesuai keinginan.</p><div class="home-hero-meta"><span class="hero-meta-dot"></span><span id="home-theme-count">0 tema tersimpan</span><span class="meta-divider"></span><span>SL360 XE · ROUND LCD</span></div></div>
-    <div class="featured-preview-card"><div class="featured-preview-header"><span><i class="home-status-dot"></i> PRATINJAU TEMA</span><span id="featured-theme-size">480 × 480</span></div><div class="featured-device"><div class="featured-device-inner"><img id="featured-theme-preview" alt="Pratinjau tema pilihan" hidden><div id="featured-preview-empty"><span class="preview-crosshair" aria-hidden="true">+</span><strong>Pilih tema untuk melihat tampilannya</strong></div></div></div><div class="featured-preview-footer"><span id="featured-theme-name">Belum ada tema tersimpan</span><span class="featured-live"><i></i> PREVIEW</span></div></div>
+  <h1 id="home-title" class="sr-only">Dashboard LCD</h1>
+  <section class="home-dashboard" aria-label="Kontrol LCD dan sensor">
+    <article class="home-display-card">
+      <div class="dashboard-section-heading"><div><span class="eyebrow">LCD DISPLAY</span><h2>Tampilan perangkat</h2></div><span class="display-resolution">480 <i>×</i> 480 PX</span></div>
+      <div class="display-preview-stage"><div class="featured-device-inner"><img id="featured-theme-preview" alt="Pratinjau tema pilihan" hidden><div id="featured-preview-empty"><span class="preview-crosshair" aria-hidden="true">+</span><strong>Pilih tema untuk melihat tampilannya</strong></div></div></div>
+      <div class="display-theme-summary"><div><span class="eyebrow">TEMA PILIHAN</span><strong id="featured-theme-name">Belum ada tema tersimpan</strong><span id="featured-theme-size">480 × 480</span></div><span id="featured-live" class="featured-live"><i></i> SIAP</span></div>
+      <div class="display-actions"><button id="featured-apply-theme" class="primary-button" type="button" disabled>Muat ke LCD</button><button id="featured-edit-theme" class="quiet-button" type="button" disabled>Edit tema</button><button id="home-stop-theme" class="home-stop-button" type="button" disabled>Hentikan</button></div>
+    </article>
+    <aside class="home-side-column">
+      <section class="home-sensor-card" aria-labelledby="sensor-title"><div class="dashboard-section-heading compact"><div><span class="eyebrow">REAL-TIME TELEMETRY</span><h2 id="sensor-title">Sensor sistem</h2></div><span class="sensor-live-indicator"><i></i> LIVE</span></div><p id="sensor-state" class="home-sensor-caption">Menghubungkan sensor…</p><div id="stats" class="stats-grid home-stats-grid"></div><div id="ports" class="home-port-status">Memeriksa port serial…</div></section>
+      <section class="home-settings-card" aria-labelledby="device-settings-title"><div class="dashboard-section-heading compact"><div><span class="eyebrow">DEVICE SETUP</span><h2 id="device-settings-title">Pengaturan perangkat</h2></div><span class="settings-mark" aria-hidden="true">SYS</span></div><label class="home-setting-row" for="brightness"><span><strong>Kecerahan LCD</strong><small>Intensitas layar perangkat</small></span><span class="home-brightness-control"><input id="brightness" type="range" min="0" max="100" value="60"><output id="brightness-value" for="brightness">60%</output></span></label><label class="home-setting-row" for="orientation"><span><strong>Orientasi</strong><small>Arah tampilan layar</small></span><select id="orientation"><option value="landscape">Landscape</option><option value="portrait">Portrait</option><option value="rlandscape">Landscape terbalik</option><option value="rportrait">Portrait terbalik</option></select></label><label class="home-setting-row home-boot-setting"><span><strong>Jalankan saat login</strong><small>Muat tema terakhir otomatis</small></span><span class="home-boot-control"><input id="start-on-boot" type="checkbox"><span class="toggle-track"></span></span></label></section>
+    </aside>
   </section>
-  <section class="home-gallery-section" aria-labelledby="gallery-title"><div class="gallery-heading"><div><span class="eyebrow">LIBRARY</span><h2 id="gallery-title">Tema Anda</h2><p>Pilih tema untuk melihat pratinjau atau langsung mengeditnya.</p></div><label class="theme-search"><span class="sr-only">Cari tema</span><span aria-hidden="true">⌕</span><input id="theme-search" type="search" placeholder="Cari tema…" autocomplete="off"></label></div><div id="theme-gallery" class="theme-gallery" aria-live="polite"></div><div id="theme-gallery-empty" class="gallery-empty" hidden><span class="gallery-empty-icon">＋</span><strong>Belum ada tema tersimpan</strong><p>Buat tema baru atau impor file JSON untuk memulai koleksi Anda.</p><button class="quiet-button" type="button" onclick="document.getElementById('create-theme-start').click()">Buat tema pertama</button></div><div id="theme-gallery-no-results" class="gallery-empty" hidden><strong>Tema tidak ditemukan</strong><p>Coba kata kunci lain.</p></div></section>
-  <footer class="home-footer"><span>SLX STUDIO <i>•</i> TEMA LCD ANDA, KENDALI ANDA</span><span>Pratinjau tidak mengirim tema ke perangkat.</span></footer>
+  <section class="home-gallery-section" aria-labelledby="gallery-title"><div class="gallery-heading"><div><span class="eyebrow">LIBRARY</span><h2 id="gallery-title">Tema tersimpan <span id="home-theme-count" class="theme-count-badge">0</span></h2></div><label class="theme-search"><span class="sr-only">Cari tema</span><span aria-hidden="true">⌕</span><input id="theme-search" type="search" placeholder="Cari tema…" autocomplete="off"></label></div><div id="theme-gallery" class="theme-gallery" aria-live="polite"></div><div id="theme-gallery-empty" class="gallery-empty" hidden><span class="gallery-empty-icon">＋</span><strong>Belum ada tema tersimpan</strong><p>Buat tema atau impor file JSON untuk memulai koleksi Anda.</p><button class="quiet-button" type="button" onclick="document.getElementById('create-theme-start').click()">Buat tema pertama</button></div><div id="theme-gallery-no-results" class="gallery-empty" hidden><strong>Tema tidak ditemukan</strong><p>Coba kata kunci lain.</p></div></section>
+  <footer class="home-footer"><span>SLX STUDIO <i>•</i> CONTROL CENTER</span><span id="home-library-status">Tema lokal · perangkat siap dikonfigurasi</span></footer>
 </main>
 <dialog id="theme-preview-dialog" class="theme-preview-dialog" aria-labelledby="dialog-theme-name"><div class="theme-preview-dialog-card"><header><div><span class="eyebrow">PRATINJAU TEMA</span><h2 id="dialog-theme-name">Tema</h2></div><button id="close-theme-preview" class="quiet-button" type="button">Tutup</button></header><div class="dialog-preview-device"><img id="dialog-theme-image" alt="Pratinjau tema LCD"></div><div class="dialog-preview-meta"><span id="dialog-theme-dimensions"></span><span id="dialog-theme-components"></span></div><button id="dialog-edit-theme" class="primary-button" type="button">Edit tema ini</button></div></dialog>
 <header class="topbar">
-  <a id="home-link" class="brand" href="#home-screen" aria-label="Kembali ke tema">
-    <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-    <span><strong>SLX</strong><small>STUDIO</small></span>
-  </a>
+  <button id="home-link" class="studio-home-button" type="button" aria-label="Kembali ke halaman utama">← <span>Kembali ke halaman utama</span></button>
   <div class="top-divider"></div>
-  <label class="theme-picker">
-    <span class="sr-only">Pilih tema</span>
-    <select id="theme-select" aria-label="Pilih tema"></select>
-  </label>
+  <span id="studio-theme-name" class="studio-theme-name">Editor tema</span>
   <input id="theme-name" class="theme-name" value="my-theme" maxlength="64" aria-label="Nama tema" placeholder="nama-tema">
   <div class="top-actions">
-    <button id="new-theme" class="quiet-button">Tema baru</button>
-    <button id="import-json" class="quiet-button">Impor JSON</button>
     <button id="export-json" class="quiet-button">Ekspor JSON</button>
     <button id="toggle-json" class="quiet-button">JSON</button>
     <button id="save-theme" class="quiet-button" title="Simpan perubahan sebagai file tema">Simpan</button>
@@ -97,25 +98,7 @@
         <button id="background-media" class="quiet-button background-media-button" type="button">Pilih gambar/video</button>
         <button id="clear-background-media" class="quiet-button clear-background-button" type="button" aria-label="Hapus media latar" title="Hapus media latar">Hapus latar</button>
       </div>
-      <label class="brightness-control" for="brightness">Kecerahan
-        <input id="brightness" type="range" min="0" max="100" value="60">
-        <output id="brightness-value" for="brightness">60%</output>
-      </label>
-      <label class="orientation-control" for="orientation">Orientasi
-        <select id="orientation">
-          <option value="landscape">Landscape</option>
-          <option value="portrait">Portrait</option>
-          <option value="rlandscape">Landscape terbalik</option>
-          <option value="rportrait">Portrait terbalik</option>
-        </select>
-      </label>
-      <label class="boot-toggle"><input id="start-on-boot" type="checkbox"><span class="toggle-track"></span><span>Muat tema terakhir saat login</span></label>
     </div>
-    <section class="sensor-panel" aria-label="Status sensor">
-      <div class="sensor-heading"><span class="eyebrow">SENSOR</span><span id="sensor-state">Sensor berhenti saat LCD tidak aktif</span></div>
-      <div id="stats" class="stats-grid"></div>
-      <div id="ports" class="port-status">Memeriksa port serial…</div>
-    </section>
   </section>
 
   <aside class="panel inspector-panel" aria-label="Properti tema dan komponen">
