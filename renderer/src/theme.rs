@@ -67,6 +67,9 @@ fn d_thick() -> f32 {
 fn d_fmt() -> String {
     "%H:%M".into()
 }
+fn d_media_fps() -> f32 {
+    2.0
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -156,6 +159,10 @@ pub enum Widget {
         w: Option<f32>,
         #[serde(default)]
         h: Option<f32>,
+        #[serde(default)]
+        frames: Vec<String>,
+        #[serde(default = "d_media_fps")]
+        fps: f32,
     },
 }
 
@@ -166,11 +173,16 @@ pub struct Background {
     /// PNG path (relative to the theme file), stretched to the canvas
     #[serde(default)]
     pub image: Option<String>,
+    /// Optional PNG frames for an animated image or video background
+    #[serde(default)]
+    pub frames: Vec<String>,
+    #[serde(default = "d_media_fps")]
+    pub fps: f32,
 }
 
 impl Default for Background {
     fn default() -> Self {
-        Background { color: Some(Color(8, 12, 20, 255)), image: None }
+        Background { color: Some(Color(8, 12, 20, 255)), image: None, frames: Vec::new(), fps: d_media_fps() }
     }
 }
 

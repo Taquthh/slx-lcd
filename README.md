@@ -34,14 +34,20 @@ Teks memakai `{metrik}` atau `{metrik:.1}`, `{net.down:rate}`. Metrik: `cpu.usag
 `mem.used mem.used_gb mem.total_gb`, `disk./.used`, `net.down net.up net.<iface>.down`,
 `gpuN.usage gpuN.temp gpuN.vram gpuN.power`, `fanN`. Metrik yang tidak tersedia tampil `--`.
 
-## Cangkang Tauri
+## Aplikasi GUI desktop
 
-Butuh `webkit2gtk-4.1` dan GTK3 (paket dev). Di Debian/Ubuntu:
-`sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev`
+GUI desktop Tauri menyediakan pratinjau sensor dan editor tema. Saat aplikasi dibuka, tema terakhir otomatis dimuat dan dikirim ke LCD. Pilih tema atau edit JSON, lalu tekan satu tombol **Muat ke LCD** untuk menerapkannya. Tombol **Hentikan** menghentikan pengiriman frame serta polling sensor. Opsi **Muat tema terakhir saat sistem mulai** menambahkan aplikasi ke autostart sesi pengguna. Aplikasi hanya mengubah tampilan LCD, bukan kecepatan pompa atau kipas cooler. Saat GUI mengambil alih atau dihentikan, service pengguna `slxd.service` dihentikan agar tidak berebut port serial. Di Debian/Ubuntu, pasang dependensi GUI berikut sekali:
 
 ```bash
-cd app/src-tauri
-cargo install tauri-cli --version "^2"
-cargo tauri icon path/to/logo.png    # menghasilkan folder icons/ yang dibutuhkan bundel
-cargo tauri dev
+sudo apt install build-essential curl file libssl-dev libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev
 ```
+
+Pastikan Rust/Cargo sudah terpasang, lalu dari folder utama repo jalankan:
+
+```bash
+bash packaging/install-gui.sh
+```
+
+Setelah selesai, buka menu aplikasi desktop dan cari **SLX LCD**. Script membangun dan memasang aplikasi serta daemon ke `~/.local/bin`, menyalin tema awal, dan mendaftarkan entri menu desktop tanpa memerlukan instalasi Tauri CLI. Untuk akses perangkat LCD, jalankan `bash packaging/install.sh` satu kali agar aturan udev dipasang; script tersebut meminta sudo untuk langkah itu. Hentikan program lain yang sedang memakai port serial LCD sebelum menekan **Kirim ke layar**.
+
+Untuk pengembangan tanpa instalasi, di Debian/Ubuntu pasang dependensi GUI di atas lalu jalankan `cargo run --release --manifest-path app/src-tauri/Cargo.toml` dari folder repo.

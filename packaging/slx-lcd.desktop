@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=SLX LCD
+Comment=Monitor and control the ID-Cooling SL360 XE LCD
+Exec=/usr/bin/env slx-lcd-app
+Terminal=false
+Categories=Utility;
+StartupNotify=true

@@ -8,22 +8,94 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
+use serde::{Deserialize, Serialize};
 use renderer::{Renderer, Theme};
 use sensors::{Sampler, Snapshot};
 
 struct AppState {
     sampler: Mutex<Sampler>,
+    last_snapshot: Mutex<Snapshot>,
     daemon: Mutex<Option<Child>>,
+    settings: Mutex<AppSettings>,
+}
+
+impl Drop for AppState {
+    fn drop(&mut self) {
+        if let Ok(daemon) = self.daemon.get_mut() {
+            if let Some(mut child) = daemon.take() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "camelCase")]
+struct AppSettings {
+    last_theme: String,
+    brightness: u8,
+    orientation: String,
+    start_on_boot: bool,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            last_theme: "aqua".into(),
+            brightness: 60,
+            orientation: "landscape".into(),
+            start_on_boot: false,
+        }
+    }
+}
+
+fn config_home() -> PathBuf {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
+        .unwrap_or_else(|| PathBuf::from("."))
 }
 
 fn config_dir() -> PathBuf {
-    let base = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
-        .unwrap_or_else(|| PathBuf::from("."));
-    base.join("slxd")
+    config_home().join("slxd")
+}
+
+fn settings_path() -> PathBuf {
+    config_dir().join("app-settings.json")
+}
+
+fn load_app_settings() -> AppSettings {
+    fs::read_to_string(settings_path())
+        .ok()
+        .and_then(|json| serde_json::from_str(&json).ok())
+        .unwrap_or_default()
+}
+
+fn sync_autostart(enabled: bool) -> Result<(), String> {
+    let path = config_home().join("autostart/slx-lcd.desktop");
+    if !enabled {
+        if path.exists() {
+            fs::remove_file(path).map_err(|e| e.to_string())?;
+        }
+        return Ok(());
+    }
+
+    let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+    let executable = executable
+        .to_string_lossy()
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('%', "%%");
+    let contents = format!(
+        "[Desktop Entry]\nType=Application\nName=SLX LCD\nComment=Load the last SLX LCD theme\nExec=\"{executable}\"\nTerminal=false\nX-GNOME-Autostart-enabled=true\n",
+    );
+    let parent = path.parent().ok_or("invalid autostart path")?;
+    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    fs::write(path, contents).map_err(|e| e.to_string())
 }
 
 fn themes_dir() -> PathBuf {
@@ -42,7 +114,10 @@ fn list_themes() -> Vec<String> {
             rd.flatten()
                 .filter_map(|e| {
                     let p = e.path();
-                    (p.extension()? == "json").then(|| p.file_stem()?.to_string_lossy().to_string())
+                    p.extension()
+                        .filter(|extension| *extension == "json")
+                        .and_then(|_| p.file_stem())
+                        .map(|stem| stem.to_string_lossy().into_owned())
                 })
                 .collect()
         })
@@ -70,16 +145,110 @@ fn save_theme(name: String, json: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn snapshot(state: tauri::State<AppState>) -> Snapshot {
-    state.sampler.lock().unwrap().sample()
+fn save_media_frames(theme: String, filename: String, frames: Vec<String>) -> Result<Vec<String>, String> {
+    if !valid_name(&theme) {
+        return Err("invalid theme name".into());
+    }
+    if frames.is_empty() || frames.len() > 24 {
+        return Err("media must contain between 1 and 24 frames".into());
+    }
+
+    let decoded: Vec<Vec<u8>> = frames
+        .iter()
+        .map(|frame| {
+            let encoded = frame
+                .strip_prefix("data:image/png;base64,")
+                .ok_or_else(|| "media frames must be PNG data URLs".to_string())?;
+            if encoded.len() > 2_800_000 {
+                return Err("each media frame must be smaller than 2 MB".into());
+            }
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(encoded)
+                .map_err(|e| e.to_string())?;
+            if !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+                return Err("invalid PNG frame".into());
+            }
+            Ok(bytes)
+        })
+        .collect::<Result<_, String>>()?;
+    if decoded.iter().map(Vec::len).sum::<usize>() > 16 * 1024 * 1024 {
+        return Err("total media frame size must be smaller than 16 MB".into());
+    }
+
+    let media_path = PathBuf::from(filename);
+    let stem: String = media_path
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .unwrap_or("media")
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '-' || *ch == '_')
+        .take(32)
+        .collect();
+    let stem = if stem.is_empty() { "media".to_string() } else { stem };
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_nanos();
+    let asset_dir_name = format!("{theme}_assets");
+    let asset_dir = themes_dir().join(&asset_dir_name);
+    fs::create_dir_all(&asset_dir).map_err(|e| e.to_string())?;
+
+    decoded
+        .into_iter()
+        .enumerate()
+        .map(|(index, bytes)| {
+            let filename = format!("{stem}-{stamp}-{index:02}.png");
+            fs::write(asset_dir.join(&filename), bytes).map_err(|e| e.to_string())?;
+            Ok(format!("{asset_dir_name}/{filename}"))
+        })
+        .collect()
 }
 
-/// Render the given theme JSON with live sensor values; returns a PNG data URL.
+#[tauri::command]
+fn get_app_settings(state: tauri::State<AppState>) -> AppSettings {
+    state.settings.lock().unwrap().clone()
+}
+
+#[tauri::command]
+fn save_app_settings(
+    state: tauri::State<AppState>,
+    last_theme: String,
+    brightness: u8,
+    orientation: String,
+    start_on_boot: bool,
+) -> Result<(), String> {
+    if !valid_name(&last_theme) {
+        return Err("invalid theme name".into());
+    }
+    if !["landscape", "portrait", "rportrait", "rlandscape"].contains(&orientation.as_str()) {
+        return Err("invalid orientation".into());
+    }
+
+    let settings = AppSettings { last_theme, brightness: brightness.min(100), orientation, start_on_boot };
+    fs::create_dir_all(config_dir()).map_err(|e| e.to_string())?;
+    let path = settings_path();
+    let temp_path = path.with_extension("json.tmp");
+    let json = serde_json::to_vec_pretty(&settings).map_err(|e| e.to_string())?;
+    fs::write(&temp_path, json).map_err(|e| e.to_string())?;
+    fs::rename(temp_path, path).map_err(|e| e.to_string())?;
+    *state.settings.lock().unwrap() = settings.clone();
+    sync_autostart(settings.start_on_boot)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn snapshot(state: tauri::State<AppState>) -> Snapshot {
+    let current = state.sampler.lock().unwrap().sample();
+    *state.last_snapshot.lock().unwrap() = current.clone();
+    current
+}
+
+/// Render the given theme JSON with the most recently sampled sensor snapshot; returns a PNG data URL.
 #[tauri::command]
 fn preview(state: tauri::State<AppState>, theme_json: String) -> Result<String, String> {
     let theme = Theme::from_json(&theme_json).map_err(|e| e.to_string())?;
     let rd = Renderer::new(theme, &themes_dir()).map_err(|e| e.to_string())?;
-    let snap = state.sampler.lock().unwrap().sample();
+    let snap = state.last_snapshot.lock().unwrap().clone();
     let frame = rd.render(&snap).map_err(|e| e.to_string())?;
     let png = renderer::to_png(&frame).ok_or("PNG encoding failed")?;
     Ok(format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png)))
@@ -118,6 +287,10 @@ fn daemon_start(
     if !["landscape", "portrait", "rportrait", "rlandscape"].contains(&orientation.as_str()) {
         return Err("invalid orientation".into());
     }
+    // Avoid competing with the optional legacy user service for the serial LCD.
+    let _ = Command::new("systemctl")
+        .args(["--user", "stop", "slxd.service"])
+        .status();
     let mut guard = state.daemon.lock().unwrap();
     if let Some(child) = guard.as_mut() {
         if child.try_wait().map_err(|e| e.to_string())?.is_none() {
@@ -138,6 +311,10 @@ fn daemon_start(
 
 #[tauri::command]
 fn daemon_stop(state: tauri::State<AppState>) -> Result<(), String> {
+    // Stop the optional user service too, otherwise it keeps streaming frames after the GUI stops.
+    let _ = Command::new("systemctl")
+        .args(["--user", "stop", "slxd.service"])
+        .status();
     if let Some(mut child) = state.daemon.lock().unwrap().take() {
         // SIGTERM first so slxd can exit cleanly, fall back to kill
         let pid = child.id() as i32;
@@ -176,12 +353,22 @@ fn list_ports() -> Vec<String> {
 }
 
 fn main() {
+    let settings = load_app_settings();
+    let _ = sync_autostart(settings.start_on_boot);
     tauri::Builder::default()
-        .manage(AppState { sampler: Mutex::new(Sampler::new()), daemon: Mutex::new(None) })
+        .manage(AppState {
+            sampler: Mutex::new(Sampler::new()),
+            last_snapshot: Mutex::new(Snapshot::default()),
+            daemon: Mutex::new(None),
+            settings: Mutex::new(settings),
+        })
         .invoke_handler(tauri::generate_handler![
             list_themes,
             read_theme,
             save_theme,
+            save_media_frames,
+            get_app_settings,
+            save_app_settings,
             snapshot,
             preview,
             daemon_start,
