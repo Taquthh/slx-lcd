@@ -19,15 +19,14 @@ async function refreshThemes(select) {
 
 let lastAppliedTheme = "";
 
-async function loadSelected(applyToLcd = false) {
+async function loadSelected() {
   const name = $("theme").value;
   if (!name) return;
   try {
     $("editor").value = await invoke("read_theme", { name });
     $("save-name").value = name;
     say("");
-    await updatePreview();
-    if (applyToLcd) await startTheme(name, false);
+    await updatePreview(true);
   } catch (e) {
     say(String(e), "err");
   }
@@ -56,8 +55,11 @@ async function startTheme(name, saveEditor) {
   });
   await saveSettings(name);
   lastAppliedTheme = name;
+  daemonActive = true;
   say("Tema dimuat. Aplikasi sedang mencoba menghubungkan LCD; periksa port dan izin jika layar belum berubah.", "ok");
   await refreshState();
+  await refreshStats();
+  await updatePreview();
 }
 
 async function saveFormSettings() {
@@ -65,9 +67,10 @@ async function saveFormSettings() {
   if (theme) await saveSettings(theme);
 }
 
+let daemonActive = false;
 let previewBusy = false;
-async function updatePreview() {
-  if (previewBusy) return;
+async function updatePreview(force = false) {
+  if ((!daemonActive && !force) || previewBusy) return;
   previewBusy = true;
   try {
     $("preview").src = await invoke("preview", { themeJson: $("editor").value });
@@ -85,7 +88,6 @@ $("editor").addEventListener("input", () => {
   debounce = setTimeout(updatePreview, 400);
 });
 
-$("btn-reload").onclick = () => loadSelected(true);
 $("theme").onchange = () => loadSelected(false);
 $("brightness").oninput = () => ($("brightness-val").textContent = $("brightness").value);
 $("brightness").onchange = () => saveFormSettings().catch((e) => say(String(e), "err"));
@@ -124,18 +126,23 @@ $("btn-start").onclick = async () => {
 $("btn-stop").onclick = async () => {
   try {
     await invoke("daemon_stop");
-    say("Dihentikan.", "ok");
+    daemonActive = false;
+    await refreshState();
+    await refreshStats();
+    say("Pengiriman ke LCD dan pembacaan sensor dihentikan.", "ok");
   } catch (e) {
     say(String(e), "err");
   }
-  refreshState();
 };
 
 async function refreshState() {
   try {
     const on = await invoke("daemon_running");
+    const wasActive = daemonActive;
+    daemonActive = on;
     $("dot").className = "dot" + (on ? " on" : "");
     $("state").textContent = on ? "daemon aktif; mencoba LCD" : "daemon berhenti";
+    if (wasActive && !on) await refreshStats();
   } catch (e) {
     say(String(e), "err");
   }
@@ -143,13 +150,32 @@ async function refreshState() {
 
 const fmt = (v, d = 0, u = "") => (v == null ? "--" : v.toFixed(d) + u);
 
+function renderStats(cells) {
+  $("stats").replaceChildren(
+    ...cells.map(([k, v]) => {
+      const d = document.createElement("div");
+      d.className = "stat";
+      const b = document.createElement("b");
+      b.textContent = v;
+      const sp = document.createElement("span");
+      sp.textContent = k;
+      d.append(b, sp);
+      return d;
+    })
+  );
+}
+
 async function refreshStats() {
+  if (!daemonActive) {
+    renderStats([["CPU", "--"], ["Suhu CPU", "--"], ["RAM", "--"], ["GPU", "--"], ["Suhu GPU", "--"], ["Kipas", "--"], ["Unduh", "--"], ["Unggah", "--"]]);
+    return;
+  }
   try {
     const s = await invoke("snapshot");
     const g = s.gpus[0];
     const down = s.net.reduce((a, n) => a + n.rx_bytes_per_s, 0);
     const up = s.net.reduce((a, n) => a + n.tx_bytes_per_s, 0);
-    const cells = [
+    renderStats([
       ["CPU", fmt(s.cpu.usage_percent, 0, "%")],
       ["Suhu CPU", fmt(s.cpu.temp_c, 0, "°C")],
       ["RAM", fmt(s.mem.used_percent, 0, "%")],
@@ -158,19 +184,7 @@ async function refreshStats() {
       ["Kipas", s.fans.length ? s.fans[0].rpm + " rpm" : "--"],
       ["Unduh", fmt(down / 1048576, 2, " MB/s")],
       ["Unggah", fmt(up / 1048576, 2, " MB/s")],
-    ];
-    $("stats").replaceChildren(
-      ...cells.map(([k, v]) => {
-        const d = document.createElement("div");
-        d.className = "stat";
-        const b = document.createElement("b");
-        b.textContent = v;
-        const sp = document.createElement("span");
-        sp.textContent = k;
-        d.append(b, sp);
-        return d;
-      })
-    );
+    ]);
   } catch (_) {}
 }
 

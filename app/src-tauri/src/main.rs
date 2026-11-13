@@ -247,6 +247,10 @@ fn daemon_start(
 
 #[tauri::command]
 fn daemon_stop(state: tauri::State<AppState>) -> Result<(), String> {
+    // Stop the optional user service too, otherwise it keeps streaming frames after the GUI stops.
+    let _ = Command::new("systemctl")
+        .args(["--user", "stop", "slxd.service"])
+        .status();
     if let Some(mut child) = state.daemon.lock().unwrap().take() {
         // SIGTERM first so slxd can exit cleanly, fall back to kill
         let pid = child.id() as i32;

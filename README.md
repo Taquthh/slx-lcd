@@ -36,7 +36,7 @@ Teks memakai `{metrik}` atau `{metrik:.1}`, `{net.down:rate}`. Metrik: `cpu.usag
 
 ## Aplikasi GUI desktop
 
-GUI desktop Tauri menyediakan pratinjau sensor dan editor tema. Saat aplikasi dibuka, tema terakhir otomatis dimuat dan dikirim ke LCD; tombol **Muat ke LCD** menerapkan tema yang dipilih, sementara **Terapkan perubahan ke LCD** mengirim isi editor. Opsi **Muat tema terakhir saat sistem mulai** menambahkan aplikasi ke autostart sesi pengguna. Aplikasi hanya mengubah tampilan LCD, bukan kecepatan pompa atau kipas cooler. Saat GUI mengambil alih, service pengguna `slxd.service` dihentikan agar tidak berebut port serial. Di Debian/Ubuntu, pasang dependensi GUI berikut sekali:
+GUI desktop Tauri menyediakan pratinjau sensor dan editor tema. Saat aplikasi dibuka, tema terakhir otomatis dimuat dan dikirim ke LCD. Pilih tema atau edit JSON, lalu tekan satu tombol **Muat ke LCD** untuk menerapkannya. Tombol **Hentikan** menghentikan pengiriman frame serta polling sensor. Opsi **Muat tema terakhir saat sistem mulai** menambahkan aplikasi ke autostart sesi pengguna. Aplikasi hanya mengubah tampilan LCD, bukan kecepatan pompa atau kipas cooler. Saat GUI mengambil alih atau dihentikan, service pengguna `slxd.service` dihentikan agar tidak berebut port serial. Di Debian/Ubuntu, pasang dependensi GUI berikut sekali:
 
 ```bash
 sudo apt install build-essential curl file libssl-dev libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev
