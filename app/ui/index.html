@@ -7,6 +7,16 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<main id="welcome-screen" class="welcome-screen" aria-labelledby="welcome-title">
+  <div class="welcome-brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span><strong>SLX</strong><small>STUDIO</small></span></div>
+  <div class="welcome-copy"><span class="eyebrow">LCD THEME WORKSPACE</span><h1 id="welcome-title">Mulai dari mana?</h1><p>Pilih tema yang ingin dikerjakan, impor file JSON, atau mulai kanvas kosong.</p></div>
+  <div class="welcome-grid">
+    <button id="create-theme-start" class="welcome-card welcome-card-primary" type="button"><span class="welcome-card-icon">+</span><span><strong>Buat tema baru</strong><small>Mulai dengan kanvas kosong di Studio.</small></span><span class="welcome-arrow">↗</span></button>
+    <button id="import-json-start" class="welcome-card" type="button"><span class="welcome-card-icon json-icon">{ }</span><span><strong>Edit tema JSON</strong><small>Buka file tema .json dan lanjutkan di Studio.</small></span><span class="welcome-arrow">↗</span></button>
+  </div>
+  <div class="welcome-saved"><div><span class="eyebrow">TEMA TERSIMPAN</span><strong>Lanjutkan pekerjaan sebelumnya</strong></div><div class="welcome-saved-controls"><label for="welcome-theme-select" class="sr-only">Pilih tema tersimpan</label><select id="welcome-theme-select" aria-label="Pilih tema tersimpan"></select><button id="open-saved-theme" class="quiet-button" type="button">Buka tema</button></div></div>
+  <p class="welcome-note">Tema baru tidak mengubah layar LCD sampai Anda memilih <strong>Muat ke LCD</strong>.</p>
+</main>
 <header class="topbar">
   <a class="brand" href="#" aria-label="SLX Studio home">
     <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -43,6 +53,11 @@
       <button class="tool-card" draggable="true" data-tool="bar"><span class="tool-icon bar-icon"><i></i></span><span>Progress</span></button>
       <button class="tool-card" draggable="true" data-tool="gauge"><span class="tool-icon gauge-icon">◔</span><span>Gauge</span></button>
       <button class="tool-card" draggable="true" data-tool="clock"><span class="tool-icon clock-icon">◷</span><span>Jam</span></button>
+      <button class="tool-card" draggable="true" data-tool="cpu-metric"><span class="tool-icon metric-icon">%</span><span>Metrik CPU</span></button>
+      <button class="tool-card" draggable="true" data-tool="ram-metric"><span class="tool-icon metric-icon">▤</span><span>Metrik RAM</span></button>
+      <button class="tool-card" draggable="true" data-tool="network-metric"><span class="tool-icon metric-icon">↕</span><span>Jaringan</span></button>
+      <button class="tool-card" draggable="true" data-tool="divider"><span class="tool-icon divider-icon"></span><span>Pemisah</span></button>
+      <button class="tool-card" draggable="true" data-tool="panel"><span class="tool-icon rect-icon"></span><span>Kartu</span></button>
     </div>
     <button id="media-drop" class="media-drop" type="button">
       <span class="media-symbol" aria-hidden="true">↥</span>
@@ -72,9 +87,12 @@
       <div class="stage-caption"><span>SL360 XE · ROUND LCD</span><span id="selection-label">Belum ada layer dipilih</span></div>
     </div>
     <div class="canvas-bottom">
-      <label class="background-control">Latar
+      <div class="background-control">
+        <label for="background-color">Warna latar</label>
         <input id="background-color" type="color" value="#0b101e" aria-label="Warna latar tema">
-      </label>
+        <button id="background-media" class="quiet-button background-media-button" type="button">Pilih gambar/video</button>
+        <button id="clear-background-media" class="icon-button clear-background-button" type="button" aria-label="Hapus media latar" title="Hapus media latar">×</button>
+      </div>
       <label class="brightness-control" for="brightness">Kecerahan
         <input id="brightness" type="range" min="0" max="100" value="60">
         <output id="brightness-value" for="brightness">60%</output>

@@ -7,6 +7,7 @@ const MAX_MEDIA_FRAMES = 12;
 let theme = null;
 let currentThemeKey = "aqua";
 let selectedWidget = -1;
+let mediaPurpose = "widget";
 let daemonActive = false;
 let previewBusy = false;
 let previewQueued = false;
@@ -56,7 +57,7 @@ function queuePreview(force = true) {
 }
 
 async function renderPreview(force = false) {
-  if (!theme || (!daemonActive && !force)) return;
+  if (!theme || (!daemonActive && !document.body.classList.contains("editor-active") && !force)) return;
   if (previewBusy) {
     previewQueued = previewQueued || force;
     return;
@@ -318,6 +319,7 @@ function renderSelection() {
 }
 
 function updateModel(renderInspectorToo = true) {
+  syncBackgroundControls();
   renderLayers();
   renderOverlay();
   if (renderInspectorToo) renderInspector();
@@ -326,6 +328,14 @@ function updateModel(renderInspectorToo = true) {
 }
 
 function defaultWidget(type, x, y) {
+  const presets = {
+    "cpu-metric": { type: "text", x, y, text: "CPU {cpu.usage}%", size: 27, color: "#25e0cc", bold: true, align: "left" },
+    "ram-metric": { type: "text", x, y, text: "RAM {mem.used}%", size: 27, color: "#9775ff", bold: true, align: "left" },
+    "network-metric": { type: "text", x, y, text: "↓ {net.down:rate}", size: 20, color: "#edf3fa", bold: true, align: "left" },
+    divider: { type: "rect", x, y, w: 160, h: 2, radius: 1, color: "#40536a" },
+    panel: { type: "rect", x, y, w: 190, h: 112, radius: 16, color: "#17263a" },
+  };
+  if (presets[type]) return structuredClone(presets[type]);
   const common = { text: { type: "text", x, y, text: "Teks baru", size: 30, color: "#edf3fa", bold: true, align: "left" },
     rect: { type: "rect", x, y, w: 120, h: 78, radius: 12, color: "#25e0cc" },
     bar: { type: "bar", x, y, w: 190, h: 15, value: "cpu.usage", min: 0, max: 100, fg: "#25e0cc", bg: "#243246", radius: 7 },
@@ -408,9 +418,14 @@ $("stage").addEventListener("drop", async (event) => {
   if (type) addWidget(type, point.x, point.y);
 });
 
+function syncBackgroundControls() {
+  $("clear-background-media").hidden = !(theme?.background?.image || theme?.background?.frames?.length);
+}
+
 function renderAll() {
   $("theme-name").value = theme.name || currentThemeKey;
   $("background-color").value = theme.background?.color || "#0b101e";
+  syncBackgroundControls();
   renderLayers();
   renderOverlay();
   renderInspector();
@@ -429,14 +444,27 @@ function normalizeTheme(value) {
 
 async function refreshThemeList(select) {
   const names = await invoke("list_themes");
-  const selectEl = $("theme-select");
-  selectEl.replaceChildren(...names.map((name) => {
-    const option = document.createElement("option");
-    option.value = name;
-    option.textContent = name;
-    return option;
-  }));
-  if (select && names.includes(select)) selectEl.value = select;
+  const fillSelect = (selectEl, placeholder) => {
+    const options = names.map((name) => {
+      const option = document.createElement("option");
+      option.value = name;
+      option.textContent = name;
+      return option;
+    });
+    if (placeholder) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = placeholder;
+      options.unshift(option);
+    }
+    selectEl.replaceChildren(...options);
+  };
+  fillSelect($("theme-select"));
+  fillSelect($("welcome-theme-select"), names.length ? "Pilih tema tersimpan…" : "Belum ada tema tersimpan");
+  if (select && names.includes(select)) {
+    $("theme-select").value = select;
+    $("welcome-theme-select").value = select;
+  }
   return names;
 }
 
@@ -445,6 +473,7 @@ async function loadTheme(key, preview = true) {
   theme = normalizeTheme(JSON.parse(source));
   currentThemeKey = key;
   selectedWidget = -1;
+  document.body.classList.add("editor-active");
   await refreshThemeList(key);
   renderAll();
   if (!preview) return;
@@ -528,8 +557,9 @@ function startPolling() {
 
 async function applyTheme() {
   const key = await saveTheme();
+  const backgroundFps = theme.background?.frames?.length > 1 ? Number(theme.background.fps) || MEDIA_FPS : 1;
   const animatedFps = (theme.widgets || []).filter((item) => item.type === "image" && item.frames?.length > 1)
-    .reduce((fps, item) => Math.max(fps, Number(item.fps) || MEDIA_FPS), 1);
+    .reduce((fps, item) => Math.max(fps, Number(item.fps) || MEDIA_FPS), backgroundFps);
   await invoke("daemon_stop");
   await invoke("daemon_start", {
     theme: key,
@@ -549,7 +579,6 @@ async function applyTheme() {
 async function stopTheme() {
   await invoke("daemon_stop");
   daemonActive = false;
-  clearInterval(previewTimer);
   clearInterval(statsTimer);
   await updateState();
   renderStats(null);
@@ -570,19 +599,16 @@ function downloadJson() {
 }
 
 function createDefaultTheme() {
-  const key = "untitled-theme";
-  currentThemeKey = key;
+  currentThemeKey = "tema-baru";
   theme = {
     name: "Tema baru",
     width: CANVAS_SIZE,
     height: CANVAS_SIZE,
-    background: { color: "#0b101e" },
-    widgets: [
-      { type: "clock", x: 240, y: 44, format: "%H:%M", size: 56, color: "#edf3fa", bold: true, align: "center" },
-      { type: "text", x: 240, y: 274, text: "CPU {cpu.usage}%", size: 24, color: "#25e0cc", bold: true, align: "center" },
-    ],
+    background: { color: "#0b101e", image: null, frames: [], fps: MEDIA_FPS },
+    widgets: [],
   };
   selectedWidget = -1;
+  document.body.classList.add("editor-active");
   renderAll();
   $("theme-select").value = "";
 }
@@ -678,6 +704,15 @@ async function addMedia(file, x, y) {
     currentThemeKey = key;
     if (!$("theme-name").value.trim()) $("theme-name").value = key;
     const paths = await invoke("save_media_frames", { theme: key, filename: file.name, frames: captured.frames });
+    if (mediaPurpose === "background") {
+      theme.background = theme.background || {};
+      theme.background.image = paths[0];
+      theme.background.frames = paths;
+      theme.background.fps = paths.length > 1 ? MEDIA_FPS : 1;
+      updateModel(false);
+      toast(`${paths.length > 1 ? "Latar animasi" : "Gambar latar"} diterapkan.`);
+      return;
+    }
     const scale = Math.min(1, 280 / captured.width, 220 / captured.height);
     const w = Math.max(40, Math.round(captured.width * scale));
     const h = Math.max(40, Math.round(captured.height * scale));
@@ -692,9 +727,21 @@ async function addMedia(file, x, y) {
   }
 }
 
-function openMediaPicker() { $("media-input").click(); }
+function openMediaPicker() {
+  mediaPurpose = "widget";
+  $("media-input").click();
+}
 $("add-media").onclick = openMediaPicker;
 $("media-drop").onclick = openMediaPicker;
+$("background-media").onclick = () => {
+  mediaPurpose = "background";
+  $("media-input").click();
+};
+$("clear-background-media").onclick = () => {
+  theme.background = { ...(theme.background || {}), image: null, frames: [] };
+  updateModel(false);
+  toast("Media latar dihapus.");
+};
 $("media-input").addEventListener("change", (event) => {
   const file = event.target.files[0];
   if (file) addMedia(file);
@@ -712,10 +759,19 @@ $("theme-name").addEventListener("input", () => {
 $("background-color").addEventListener("input", (event) => {
   theme.background = theme.background || {};
   theme.background.color = event.target.value;
-  updateSource();
-  queuePreview(true);
+  theme.background.image = null;
+  theme.background.frames = [];
+  updateModel(false);
 });
+$("create-theme-start").onclick = createDefaultTheme;
 $("new-theme").onclick = createDefaultTheme;
+$("import-json-start").onclick = () => $("json-input").click();
+$("open-saved-theme").onclick = async () => {
+  const key = $("welcome-theme-select").value;
+  if (!key) return toast("Pilih tema tersimpan terlebih dahulu.", true);
+  try { await loadTheme(key); }
+  catch (error) { toast(String(error), true); }
+};
 $("save-theme").onclick = () => saveTheme().catch((error) => toast(String(error), true));
 $("apply-theme").onclick = () => applyTheme().catch((error) => toast(String(error), true));
 $("stop-theme").onclick = () => stopTheme().catch((error) => toast(String(error), true));
@@ -742,6 +798,7 @@ $("json-input").addEventListener("change", async (event) => {
     theme = normalizeTheme(JSON.parse(await file.text()));
     currentThemeKey = slug(file.name.replace(/\.json$/i, "")) || "imported-theme";
     selectedWidget = -1;
+    document.body.classList.add("editor-active");
     await refreshThemeList();
     renderAll();
     toast("Tema JSON dibuka. Simpan untuk menambahkannya ke daftar tema.");
@@ -765,20 +822,12 @@ async function init() {
     $("brightness-value").value = `${settings.brightness}%`;
     $("orientation").value = settings.orientation;
     $("start-on-boot").checked = settings.startOnBoot;
-    const names = await refreshThemeList();
-    if (!names.length) {
-      createDefaultTheme();
-      await refreshPorts();
-      renderStats(null);
-      return;
-    }
-    const selected = names.includes(settings.lastTheme) ? settings.lastTheme : names[0];
-    await loadTheme(selected);
-    if (await invoke("daemon_running")) await stopTheme();
-    await applyTheme();
+    await refreshThemeList();
+    await updateState();
     await refreshPorts();
     await refreshStats();
     setInterval(updateState, 1800);
+    previewTimer = setInterval(() => renderPreview(), 500);
   } catch (error) {
     toast(String(error), true);
   }
