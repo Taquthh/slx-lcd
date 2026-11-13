@@ -23,6 +23,8 @@
   #preview { width: 100%; max-width: 480px; aspect-ratio: 1; border-radius: 50%/50%; background: #000; display: block; margin: 0 auto; border: 1px solid var(--line); }
   .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
   label { color: var(--muted); }
+  .boot-option { display: flex; align-items: center; gap: 8px; }
+  .boot-option input { width: auto; padding: 0; accent-color: var(--accent); }
   select, input, button, textarea { font: inherit; color: var(--text); background: #0c1626; border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; }
   button { cursor: pointer; background: #14233a; }
   button:hover { border-color: var(--accent); }
@@ -51,7 +53,7 @@
       <div class="row">
         <label for="theme">Tema</label>
         <select id="theme"></select>
-        <button id="btn-reload">Muat</button>
+        <button id="btn-reload">Muat ke LCD</button>
       </div>
       <div class="row">
         <label for="brightness">Kecerahan</label>
@@ -66,8 +68,11 @@
         </select>
       </div>
       <div class="row">
-        <button id="btn-start" class="primary">Kirim ke layar</button>
+        <button id="btn-start" class="primary">Terapkan perubahan ke LCD</button>
         <button id="btn-stop" class="danger">Hentikan</button>
+      </div>
+      <div class="row">
+        <label class="boot-option" for="start-on-boot"><input id="start-on-boot" type="checkbox"> Muat tema terakhir saat sistem mulai</label>
       </div>
     </section>
     <section style="margin-top:20px">

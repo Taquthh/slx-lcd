@@ -10,20 +10,90 @@ use std::process::{Child, Command};
 use std::sync::Mutex;
 
 use base64::Engine;
+use serde::{Deserialize, Serialize};
 use renderer::{Renderer, Theme};
 use sensors::{Sampler, Snapshot};
 
 struct AppState {
     sampler: Mutex<Sampler>,
     daemon: Mutex<Option<Child>>,
+    settings: Mutex<AppSettings>,
+}
+
+impl Drop for AppState {
+    fn drop(&mut self) {
+        if let Ok(daemon) = self.daemon.get_mut() {
+            if let Some(mut child) = daemon.take() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "camelCase")]
+struct AppSettings {
+    last_theme: String,
+    brightness: u8,
+    orientation: String,
+    start_on_boot: bool,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            last_theme: "aqua".into(),
+            brightness: 60,
+            orientation: "landscape".into(),
+            start_on_boot: false,
+        }
+    }
+}
+
+fn config_home() -> PathBuf {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
+        .unwrap_or_else(|| PathBuf::from("."))
 }
 
 fn config_dir() -> PathBuf {
-    let base = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
-        .unwrap_or_else(|| PathBuf::from("."));
-    base.join("slxd")
+    config_home().join("slxd")
+}
+
+fn settings_path() -> PathBuf {
+    config_dir().join("app-settings.json")
+}
+
+fn load_app_settings() -> AppSettings {
+    fs::read_to_string(settings_path())
+        .ok()
+        .and_then(|json| serde_json::from_str(&json).ok())
+        .unwrap_or_default()
+}
+
+fn sync_autostart(enabled: bool) -> Result<(), String> {
+    let path = config_home().join("autostart/slx-lcd.desktop");
+    if !enabled {
+        if path.exists() {
+            fs::remove_file(path).map_err(|e| e.to_string())?;
+        }
+        return Ok(());
+    }
+
+    let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+    let executable = executable
+        .to_string_lossy()
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('%', "%%");
+    let contents = format!(
+        "[Desktop Entry]\nType=Application\nName=SLX LCD\nComment=Load the last SLX LCD theme\nExec=\"{executable}\"\nTerminal=false\nX-GNOME-Autostart-enabled=true\n",
+    );
+    let parent = path.parent().ok_or("invalid autostart path")?;
+    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    fs::write(path, contents).map_err(|e| e.to_string())
 }
 
 fn themes_dir() -> PathBuf {
@@ -70,6 +140,38 @@ fn save_theme(name: String, json: String) -> Result<(), String> {
     Theme::from_json(&json).map_err(|e| e.to_string())?; // never save a broken theme
     fs::create_dir_all(themes_dir()).map_err(|e| e.to_string())?;
     fs::write(themes_dir().join(format!("{name}.json")), json).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_app_settings(state: tauri::State<AppState>) -> AppSettings {
+    state.settings.lock().unwrap().clone()
+}
+
+#[tauri::command]
+fn save_app_settings(
+    state: tauri::State<AppState>,
+    last_theme: String,
+    brightness: u8,
+    orientation: String,
+    start_on_boot: bool,
+) -> Result<(), String> {
+    if !valid_name(&last_theme) {
+        return Err("invalid theme name".into());
+    }
+    if !["landscape", "portrait", "rportrait", "rlandscape"].contains(&orientation.as_str()) {
+        return Err("invalid orientation".into());
+    }
+
+    let settings = AppSettings { last_theme, brightness: brightness.min(100), orientation, start_on_boot };
+    fs::create_dir_all(config_dir()).map_err(|e| e.to_string())?;
+    let path = settings_path();
+    let temp_path = path.with_extension("json.tmp");
+    let json = serde_json::to_vec_pretty(&settings).map_err(|e| e.to_string())?;
+    fs::write(&temp_path, json).map_err(|e| e.to_string())?;
+    fs::rename(temp_path, path).map_err(|e| e.to_string())?;
+    *state.settings.lock().unwrap() = settings.clone();
+    sync_autostart(settings.start_on_boot)?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -121,6 +223,10 @@ fn daemon_start(
     if !["landscape", "portrait", "rportrait", "rlandscape"].contains(&orientation.as_str()) {
         return Err("invalid orientation".into());
     }
+    // Avoid competing with the optional legacy user service for the serial LCD.
+    let _ = Command::new("systemctl")
+        .args(["--user", "stop", "slxd.service"])
+        .status();
     let mut guard = state.daemon.lock().unwrap();
     if let Some(child) = guard.as_mut() {
         if child.try_wait().map_err(|e| e.to_string())?.is_none() {
@@ -179,12 +285,20 @@ fn list_ports() -> Vec<String> {
 }
 
 fn main() {
+    let settings = load_app_settings();
+    let _ = sync_autostart(settings.start_on_boot);
     tauri::Builder::default()
-        .manage(AppState { sampler: Mutex::new(Sampler::new()), daemon: Mutex::new(None) })
+        .manage(AppState {
+            sampler: Mutex::new(Sampler::new()),
+            daemon: Mutex::new(None),
+            settings: Mutex::new(settings),
+        })
         .invoke_handler(tauri::generate_handler![
             list_themes,
             read_theme,
             save_theme,
+            get_app_settings,
+            save_app_settings,
             snapshot,
             preview,
             daemon_start,

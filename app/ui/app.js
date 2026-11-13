@@ -17,7 +17,9 @@ async function refreshThemes(select) {
   return names;
 }
 
-async function loadSelected() {
+let lastAppliedTheme = "";
+
+async function loadSelected(applyToLcd = false) {
   const name = $("theme").value;
   if (!name) return;
   try {
@@ -25,9 +27,42 @@ async function loadSelected() {
     $("save-name").value = name;
     say("");
     await updatePreview();
+    if (applyToLcd) await startTheme(name, false);
   } catch (e) {
     say(String(e), "err");
   }
+}
+
+async function saveSettings(theme) {
+  await invoke("save_app_settings", {
+    lastTheme: theme,
+    brightness: Number($("brightness").value),
+    orientation: $("orientation").value,
+    startOnBoot: $("start-on-boot").checked,
+  });
+}
+
+async function startTheme(name, saveEditor) {
+  if (saveEditor) {
+    await invoke("save_theme", { name, json: $("editor").value });
+    await refreshThemes(name);
+  }
+  await invoke("daemon_stop");
+  await invoke("daemon_start", {
+    theme: name,
+    brightness: Number($("brightness").value),
+    orientation: $("orientation").value,
+    fps: 1,
+  });
+  await saveSettings(name);
+  lastAppliedTheme = name;
+  say("Tema dimuat. Aplikasi sedang mencoba menghubungkan LCD; periksa port dan izin jika layar belum berubah.", "ok");
+  await refreshState();
+}
+
+async function saveFormSettings() {
+  const theme = lastAppliedTheme || $("theme").value;
+  if (theme) await saveSettings(theme);
 }
 
 let previewBusy = false;
@@ -50,9 +85,21 @@ $("editor").addEventListener("input", () => {
   debounce = setTimeout(updatePreview, 400);
 });
 
-$("btn-reload").onclick = loadSelected;
-$("theme").onchange = loadSelected;
+$("btn-reload").onclick = () => loadSelected(true);
+$("theme").onchange = () => loadSelected(false);
 $("brightness").oninput = () => ($("brightness-val").textContent = $("brightness").value);
+$("brightness").onchange = () => saveFormSettings().catch((e) => say(String(e), "err"));
+$("orientation").onchange = () => saveFormSettings().catch((e) => say(String(e), "err"));
+$("start-on-boot").onchange = async () => {
+  const checkbox = $("start-on-boot");
+  try {
+    await saveFormSettings();
+    say(checkbox.checked ? "Tema terakhir akan dimuat saat sistem mulai." : "Muat otomatis saat sistem mulai dinonaktifkan.", "ok");
+  } catch (e) {
+    checkbox.checked = !checkbox.checked;
+    say(String(e), "err");
+  }
+};
 
 $("btn-save").onclick = async () => {
   const name = $("save-name").value.trim();
@@ -68,21 +115,10 @@ $("btn-save").onclick = async () => {
 $("btn-start").onclick = async () => {
   const name = $("save-name").value.trim() || $("theme").value;
   try {
-    // the daemon reads the theme from disk, so save the editor content first
-    await invoke("save_theme", { name, json: $("editor").value });
-    await refreshThemes(name);
-    await invoke("daemon_stop");
-    await invoke("daemon_start", {
-      theme: name,
-      brightness: Number($("brightness").value),
-      orientation: $("orientation").value,
-      fps: 1,
-    });
-    say("Dikirim ke layar.", "ok");
+    await startTheme(name, true);
   } catch (e) {
     say(String(e), "err");
   }
-  refreshState();
 };
 
 $("btn-stop").onclick = async () => {
@@ -96,9 +132,13 @@ $("btn-stop").onclick = async () => {
 };
 
 async function refreshState() {
-  const on = await invoke("daemon_running");
-  $("dot").className = "dot" + (on ? " on" : "");
-  $("state").textContent = on ? "mengirim ke layar" : "daemon berhenti";
+  try {
+    const on = await invoke("daemon_running");
+    $("dot").className = "dot" + (on ? " on" : "");
+    $("state").textContent = on ? "daemon aktif; mencoba LCD" : "daemon berhenti";
+  } catch (e) {
+    say(String(e), "err");
+  }
 }
 
 const fmt = (v, d = 0, u = "") => (v == null ? "--" : v.toFixed(d) + u);
@@ -135,13 +175,29 @@ async function refreshStats() {
 }
 
 (async function init() {
-  const names = await refreshThemes();
-  if (names.length) await loadSelected();
-  else say("Belum ada tema di ~/.config/slxd/themes. Salin themes/aqua.json ke sana atau jalankan packaging/install.sh.", "err");
-  $("ports").textContent = (await invoke("list_ports")).join("\n") || "Tidak ada /dev/ttyACM* atau ttyUSB*";
-  refreshState();
-  refreshStats();
-  setInterval(refreshStats, 2000);
-  setInterval(refreshState, 2000);
-  setInterval(updatePreview, 3000); // keep live values moving in the preview
+  try {
+    const settings = await invoke("get_app_settings");
+    $("brightness").value = settings.brightness;
+    $("brightness-val").textContent = settings.brightness;
+    $("orientation").value = settings.orientation;
+    $("start-on-boot").checked = settings.startOnBoot;
+
+    const names = await refreshThemes();
+    const theme = names.includes(settings.lastTheme) ? settings.lastTheme : names[0];
+    if (theme) {
+      await refreshThemes(theme);
+      await loadSelected();
+      await startTheme(theme, false);
+    } else {
+      say("Belum ada tema di ~/.config/slxd/themes. Jalankan packaging/install-gui.sh terlebih dahulu.", "err");
+    }
+    $("ports").textContent = (await invoke("list_ports")).join("\n") || "Tidak ada /dev/ttyACM* atau ttyUSB*";
+    refreshState();
+    refreshStats();
+    setInterval(refreshStats, 2000);
+    setInterval(refreshState, 2000);
+    setInterval(updatePreview, 3000);
+  } catch (e) {
+    say(String(e), "err");
+  }
 })();
