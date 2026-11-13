@@ -1,7 +1,1 @@
-    Checking memchr v2.8.3
-    Checking sysinfo v0.40.3
-    Checking serde_json v1.0.154
-    Checking sensors v0.1.0 (/home/qnf/Downloads/slx-lcd/sensors)
-    Checking renderer v0.1.0 (/home/qnf/Downloads/slx-lcd/renderer)
-    Checking slxd v0.1.0 (/home/qnf/Downloads/slx-lcd/slxd)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.48s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
