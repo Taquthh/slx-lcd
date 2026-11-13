@@ -8,6 +8,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
@@ -16,6 +17,7 @@ use sensors::{Sampler, Snapshot};
 
 struct AppState {
     sampler: Mutex<Sampler>,
+    last_snapshot: Mutex<Snapshot>,
     daemon: Mutex<Option<Child>>,
     settings: Mutex<AppSettings>,
 }
@@ -143,6 +145,66 @@ fn save_theme(name: String, json: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn save_media_frames(theme: String, filename: String, frames: Vec<String>) -> Result<Vec<String>, String> {
+    if !valid_name(&theme) {
+        return Err("invalid theme name".into());
+    }
+    if frames.is_empty() || frames.len() > 24 {
+        return Err("media must contain between 1 and 24 frames".into());
+    }
+
+    let decoded: Vec<Vec<u8>> = frames
+        .iter()
+        .map(|frame| {
+            let encoded = frame
+                .strip_prefix("data:image/png;base64,")
+                .ok_or_else(|| "media frames must be PNG data URLs".to_string())?;
+            if encoded.len() > 2_800_000 {
+                return Err("each media frame must be smaller than 2 MB".into());
+            }
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(encoded)
+                .map_err(|e| e.to_string())?;
+            if !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+                return Err("invalid PNG frame".into());
+            }
+            Ok(bytes)
+        })
+        .collect::<Result<_, String>>()?;
+    if decoded.iter().map(Vec::len).sum::<usize>() > 16 * 1024 * 1024 {
+        return Err("total media frame size must be smaller than 16 MB".into());
+    }
+
+    let media_path = PathBuf::from(filename);
+    let stem: String = media_path
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .unwrap_or("media")
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '-' || *ch == '_')
+        .take(32)
+        .collect();
+    let stem = if stem.is_empty() { "media".to_string() } else { stem };
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_nanos();
+    let asset_dir_name = format!("{theme}_assets");
+    let asset_dir = themes_dir().join(&asset_dir_name);
+    fs::create_dir_all(&asset_dir).map_err(|e| e.to_string())?;
+
+    decoded
+        .into_iter()
+        .enumerate()
+        .map(|(index, bytes)| {
+            let filename = format!("{stem}-{stamp}-{index:02}.png");
+            fs::write(asset_dir.join(&filename), bytes).map_err(|e| e.to_string())?;
+            Ok(format!("{asset_dir_name}/{filename}"))
+        })
+        .collect()
+}
+
+#[tauri::command]
 fn get_app_settings(state: tauri::State<AppState>) -> AppSettings {
     state.settings.lock().unwrap().clone()
 }
@@ -176,15 +238,17 @@ fn save_app_settings(
 
 #[tauri::command]
 fn snapshot(state: tauri::State<AppState>) -> Snapshot {
-    state.sampler.lock().unwrap().sample()
+    let current = state.sampler.lock().unwrap().sample();
+    *state.last_snapshot.lock().unwrap() = current.clone();
+    current
 }
 
-/// Render the given theme JSON with live sensor values; returns a PNG data URL.
+/// Render the given theme JSON with the most recently sampled sensor snapshot; returns a PNG data URL.
 #[tauri::command]
 fn preview(state: tauri::State<AppState>, theme_json: String) -> Result<String, String> {
     let theme = Theme::from_json(&theme_json).map_err(|e| e.to_string())?;
     let rd = Renderer::new(theme, &themes_dir()).map_err(|e| e.to_string())?;
-    let snap = state.sampler.lock().unwrap().sample();
+    let snap = state.last_snapshot.lock().unwrap().clone();
     let frame = rd.render(&snap).map_err(|e| e.to_string())?;
     let png = renderer::to_png(&frame).ok_or("PNG encoding failed")?;
     Ok(format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png)))
@@ -294,6 +358,7 @@ fn main() {
     tauri::Builder::default()
         .manage(AppState {
             sampler: Mutex::new(Sampler::new()),
+            last_snapshot: Mutex::new(Snapshot::default()),
             daemon: Mutex::new(None),
             settings: Mutex::new(settings),
         })
@@ -301,6 +366,7 @@ fn main() {
             list_themes,
             read_theme,
             save_theme,
+            save_media_frames,
             get_app_settings,
             save_app_settings,
             snapshot,

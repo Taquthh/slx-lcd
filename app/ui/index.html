@@ -3,95 +3,112 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SLX LCD</title>
-<style>
-  :root {
-    --bg: #0a111c; --panel: #111b2b; --line: #1f2f47; --text: #e6f1fa; --muted: #7f9db3;
-    --accent: #2ee6c5; --warn: #ff9f43; --bad: #ff6b6b;
-    color-scheme: dark;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, "Inter", sans-serif; }
-  header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
-  header h1 { font-size: 16px; margin: 0; letter-spacing: .02em; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
-  .dot.on { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
-  main { display: grid; grid-template-columns: 500px 1fr; gap: 20px; padding: 20px; }
-  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
-  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
-  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 12px; }
-  #preview { width: 100%; max-width: 480px; aspect-ratio: 1; border-radius: 50%/50%; background: #000; display: block; margin: 0 auto; border: 1px solid var(--line); }
-  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
-  label { color: var(--muted); }
-  .boot-option { display: flex; align-items: center; gap: 8px; }
-  .boot-option input { width: auto; padding: 0; accent-color: var(--accent); }
-  select, input, button, textarea { font: inherit; color: var(--text); background: #0c1626; border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; }
-  button { cursor: pointer; background: #14233a; }
-  button:hover { border-color: var(--accent); }
-  button.primary { background: var(--accent); color: #04211c; border-color: var(--accent); font-weight: 600; }
-  button.danger { border-color: var(--bad); color: var(--bad); }
-  textarea { width: 100%; min-height: 360px; font: 12.5px/1.5 ui-monospace, "DejaVu Sans Mono", monospace; resize: vertical; tab-size: 2; }
-  #msg { min-height: 1.4em; margin-top: 8px; }
-  #msg.err { color: var(--bad); } #msg.ok { color: var(--accent); }
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
-  .stat { background: #0c1626; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
-  .stat b { display: block; font-size: 18px; } .stat span { color: var(--muted); font-size: 12px; }
-  .ports { color: var(--muted); font: 12px ui-monospace, monospace; white-space: pre-wrap; }
-</style>
+<title>SLX Studio — LCD Theme Builder</title>
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header>
-  <span id="dot" class="dot"></span>
-  <h1>SLX LCD · ID-Cooling SL360 XE</h1>
-  <span id="state" style="color:var(--muted)">daemon berhenti</span>
+<header class="topbar">
+  <a class="brand" href="#" aria-label="SLX Studio home">
+    <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+    <span><strong>SLX</strong><small>STUDIO</small></span>
+  </a>
+  <div class="top-divider"></div>
+  <label class="theme-picker">
+    <span class="sr-only">Pilih tema</span>
+    <select id="theme-select" aria-label="Pilih tema"></select>
+  </label>
+  <input id="theme-name" class="theme-name" value="my-theme" maxlength="64" aria-label="Nama tema" placeholder="nama-tema">
+  <div class="top-actions">
+    <button id="new-theme" class="quiet-button">Tema baru</button>
+    <button id="import-json" class="quiet-button">Impor JSON</button>
+    <button id="export-json" class="quiet-button">Ekspor JSON</button>
+    <button id="toggle-json" class="quiet-button">JSON</button>
+    <button id="save-theme" class="quiet-button" title="Simpan perubahan sebagai file tema">Simpan</button>
+    <button id="apply-theme" class="primary-button" title="Simpan perubahan lalu kirim tema ke layar LCD">Muat ke LCD</button>
+    <button id="stop-theme" class="stop-button">Hentikan</button>
+  </div>
+  <div class="connection"><span id="status-dot" class="status-dot"></span><span id="connection-label">Terputus</span></div>
 </header>
-<main>
-  <div>
-    <section>
-      <h2>Pratinjau langsung</h2>
-      <img id="preview" alt="Pratinjau layar 480x480">
-      <div class="row">
-        <label for="theme">Tema</label>
-        <select id="theme"></select>
+
+<main class="studio">
+  <aside class="panel left-panel" aria-label="Perangkat dan layer">
+    <div class="panel-heading">
+      <div><span class="eyebrow">WORKSPACE</span><h1>Komponen</h1></div>
+      <button id="add-media" class="icon-button" aria-label="Tambah media" title="Tambah gambar, GIF, atau video">+</button>
+    </div>
+    <p class="panel-hint">Seret ke layar atau klik untuk menambahkan.</p>
+    <div class="tool-grid" id="tool-palette">
+      <button class="tool-card" draggable="true" data-tool="text"><span class="tool-icon text-icon">T</span><span>Teks</span></button>
+      <button class="tool-card" draggable="true" data-tool="rect"><span class="tool-icon rect-icon"></span><span>Bentuk</span></button>
+      <button class="tool-card" draggable="true" data-tool="bar"><span class="tool-icon bar-icon"><i></i></span><span>Progress</span></button>
+      <button class="tool-card" draggable="true" data-tool="gauge"><span class="tool-icon gauge-icon">◔</span><span>Gauge</span></button>
+      <button class="tool-card" draggable="true" data-tool="clock"><span class="tool-icon clock-icon">◷</span><span>Jam</span></button>
+    </div>
+    <button id="media-drop" class="media-drop" type="button">
+      <span class="media-symbol" aria-hidden="true">↥</span>
+      <strong>Tambah media</strong>
+      <small>Gambar, ikon, GIF, dan video jadi frame PNG</small>
+    </button>
+    <div class="section-divider"></div>
+    <div class="panel-heading compact-heading">
+      <div><span class="eyebrow">LAYERS</span><h2>Urutan layar</h2></div>
+      <span id="layer-count" class="count-pill">0</span>
+    </div>
+    <div id="layers" class="layer-list" aria-label="Layer tema"></div>
+    <div class="panel-footnote">Layer paling bawah digambar lebih dulu.</div>
+  </aside>
+
+  <section class="canvas-column" aria-label="Editor layar">
+    <div class="canvas-toolbar">
+      <div><span class="eyebrow">CANVAS</span><strong>Pratinjau perangkat</strong></div>
+      <div class="canvas-meta"><span class="live-dot"></span><span>480 × 480</span><span class="zoom-pill">1:1</span></div>
+    </div>
+    <div class="canvas-stage-wrap">
+      <div id="stage" class="device-stage" aria-label="Canvas tema; seret komponen untuk memindahkannya">
+        <img id="preview" alt="Pratinjau tema LCD">
+        <div id="widget-layer" class="widget-layer"></div>
+        <div id="empty-state" class="empty-state"><span>+</span><strong>Mulai desain layar</strong><small>Seret komponen ke sini, atau tambahkan media</small></div>
       </div>
-      <div class="row">
-        <label for="brightness">Kecerahan</label>
+      <div class="stage-caption"><span>SL360 XE · ROUND LCD</span><span id="selection-label">Belum ada layer dipilih</span></div>
+    </div>
+    <div class="canvas-bottom">
+      <label class="background-control">Latar
+        <input id="background-color" type="color" value="#0b101e" aria-label="Warna latar tema">
+      </label>
+      <label class="brightness-control" for="brightness">Kecerahan
         <input id="brightness" type="range" min="0" max="100" value="60">
-        <span id="brightness-val">60</span>
-        <label for="orientation">Orientasi</label>
+        <output id="brightness-value" for="brightness">60%</output>
+      </label>
+      <label class="orientation-control" for="orientation">Orientasi
         <select id="orientation">
           <option value="landscape">Landscape</option>
           <option value="portrait">Portrait</option>
           <option value="rlandscape">Landscape terbalik</option>
           <option value="rportrait">Portrait terbalik</option>
         </select>
-      </div>
-      <div class="row">
-        <button id="btn-start" class="primary">Muat ke LCD</button>
-        <button id="btn-stop" class="danger">Hentikan</button>
-      </div>
-      <div class="row">
-        <label class="boot-option" for="start-on-boot"><input id="start-on-boot" type="checkbox"> Muat tema terakhir saat sistem mulai</label>
-      </div>
-    </section>
-    <section style="margin-top:20px">
-      <h2>Sensor</h2>
-      <div class="stats" id="stats"></div>
-      <h2 style="margin-top:14px">Port serial</h2>
-      <div class="ports" id="ports">…</div>
-    </section>
-  </div>
-  <section>
-    <h2>Editor tema (JSON)</h2>
-    <textarea id="editor" spellcheck="false"></textarea>
-    <div class="row">
-      <input id="save-name" placeholder="nama-tema" size="18">
-      <button id="btn-save">Simpan</button>
-          <span style="color:var(--muted)">Sensor diperbarui saat LCD aktif; setelah dihentikan nilainya dibekukan.</span>
+      </label>
+      <label class="boot-toggle"><input id="start-on-boot" type="checkbox"><span class="toggle-track"></span><span>Muat tema terakhir saat login</span></label>
     </div>
-    <div id="msg"></div>
+    <section class="sensor-panel" aria-label="Status sensor">
+      <div class="sensor-heading"><span class="eyebrow">SENSOR</span><span id="sensor-state">Sensor berhenti saat LCD tidak aktif</span></div>
+      <div id="stats" class="stats-grid"></div>
+      <div id="ports" class="port-status">Memeriksa port serial…</div>
+    </section>
   </section>
+
+  <aside class="panel inspector-panel" aria-label="Properti tema dan komponen">
+    <div id="inspector"></div>
+    <section id="json-panel" class="json-panel" hidden>
+      <div class="json-heading"><div><span class="eyebrow">SOURCE</span><h2>JSON tema</h2></div><button id="close-json" class="icon-button" aria-label="Tutup editor JSON">×</button></div>
+      <textarea id="json-source" spellcheck="false" aria-label="Sumber JSON tema"></textarea>
+      <div class="json-actions"><button id="apply-json" class="primary-button">Terapkan JSON</button></div>
+    </section>
+  </aside>
 </main>
+
+<input id="media-input" type="file" accept="image/*,video/*" hidden>
+<input id="json-input" type="file" accept="application/json,.json" hidden>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script src="app.js"></script>
 </body>
 </html>

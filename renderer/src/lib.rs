@@ -5,7 +5,8 @@ pub mod metrics;
 pub mod theme;
 
 use std::ffi::CString;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use ab_glyph::{point, Font, FontRef, PxScale, ScaleFont};
 use lcd_core::Rgba;
@@ -35,7 +36,7 @@ pub enum RenderError {
 pub struct Renderer {
     pub theme: Theme,
     background: Option<Pixmap>,
-    images: Vec<Option<Pixmap>>, // parallel to theme.widgets
+    images: Vec<Option<Vec<Pixmap>>>, // parallel to theme.widgets
     regular: FontRef<'static>,
     bold: FontRef<'static>,
 }
@@ -50,8 +51,23 @@ impl Renderer {
 
     pub fn new(theme: Theme, base_dir: &Path) -> Result<Self, RenderError> {
         let load = |rel: &str| -> Result<Pixmap, RenderError> {
-            let p = base_dir.join(rel);
-            Pixmap::load_png(&p).map_err(|e| RenderError::Image(p, e.to_string()))
+            let relative = Path::new(rel);
+            let unresolved = base_dir.join(relative);
+            if relative.is_absolute()
+                || relative.components().any(|component| !matches!(component, Component::Normal(_)))
+            {
+                return Err(RenderError::Image(unresolved, "asset path must stay inside the theme folder".into()));
+            }
+            let base = base_dir
+                .canonicalize()
+                .map_err(|error| RenderError::Image(base_dir.to_path_buf(), error.to_string()))?;
+            let path = unresolved
+                .canonicalize()
+                .map_err(|error| RenderError::Image(unresolved.clone(), error.to_string()))?;
+            if !path.starts_with(&base) {
+                return Err(RenderError::Image(path, "asset path must stay inside the theme folder".into()));
+            }
+            Pixmap::load_png(&path).map_err(|error| RenderError::Image(path, error.to_string()))
         };
         let background = match &theme.background.image {
             Some(rel) => Some(load(rel)?),
@@ -60,7 +76,18 @@ impl Renderer {
         let mut images = Vec::with_capacity(theme.widgets.len());
         for w in &theme.widgets {
             images.push(match w {
-                Widget::Image { path, .. } => Some(load(path)?),
+                Widget::Image { path, frames, .. } => {
+                    let paths: Vec<&str> = if frames.is_empty() {
+                        vec![path.as_str()]
+                    } else {
+                        frames.iter().map(String::as_str).collect()
+                    };
+                    let mut loaded = Vec::with_capacity(paths.len());
+                    for path in paths {
+                        loaded.push(load(path)?);
+                    }
+                    Some(loaded)
+                }
                 _ => None,
             });
         }
@@ -75,12 +102,19 @@ impl Renderer {
 
     /// Render with the current wall-clock time.
     pub fn render(&self, snap: &Snapshot) -> Result<Rgba, RenderError> {
-        let now = unsafe { libc::time(std::ptr::null_mut()) } as i64;
-        self.render_at(snap, now)
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        self.render_with_time(snap, (now_ms / 1000) as i64, now_ms)
     }
 
     /// Render using `unix_secs` for clock widgets (deterministic, for tests).
     pub fn render_at(&self, snap: &Snapshot, unix_secs: i64) -> Result<Rgba, RenderError> {
+        self.render_with_time(snap, unix_secs, (unix_secs.max(0) as u64).saturating_mul(1000))
+    }
+
+    fn render_with_time(&self, snap: &Snapshot, unix_secs: i64, now_ms: u64) -> Result<Rgba, RenderError> {
         let (w, h) = (self.theme.width, self.theme.height);
         let mut pm = Pixmap::new(w as u32, h as u32).ok_or(RenderError::Canvas(w, h))?;
         // opaque canvas: every pixel ends up with alpha 255
@@ -122,12 +156,20 @@ impl Renderer {
                     let s = strftime(format, unix_secs);
                     self.text(&mut pm, *x, *y, &s, *size, *color, *bold, *align);
                 }
-                Widget::Image { x, y, w, h, .. } => {
-                    if let Some(img) = &self.images[i] {
-                        let sx = w.map(|w| w / img.width() as f32).unwrap_or(1.0);
-                        let sy = h.map(|h| h / img.height() as f32).unwrap_or(1.0);
-                        let t = Transform::from_row(sx, 0.0, 0.0, sy, *x, *y);
-                        pm.draw_pixmap(0, 0, img.as_ref(), &PixmapPaint::default(), t, None);
+                Widget::Image { x, y, w, h, fps, .. } => {
+                    if let Some(frames) = &self.images[i] {
+                        if !frames.is_empty() {
+                            let frame_index = if frames.len() > 1 {
+                                ((now_ms as f64 / 1000.0 * fps.clamp(0.2, 10.0) as f64).floor() as usize) % frames.len()
+                            } else {
+                                0
+                            };
+                            let img = &frames[frame_index];
+                            let sx = w.map(|w| w / img.width() as f32).unwrap_or(1.0);
+                            let sy = h.map(|h| h / img.height() as f32).unwrap_or(1.0);
+                            let t = Transform::from_row(sx, 0.0, 0.0, sy, *x, *y);
+                            pm.draw_pixmap(0, 0, img.as_ref(), &PixmapPaint::default(), t, None);
+                        }
                     }
                 }
             }

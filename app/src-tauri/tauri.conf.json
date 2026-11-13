@@ -6,7 +6,7 @@
   "build": { "frontendDist": "../ui" },
   "app": {
     "withGlobalTauri": true,
-    "windows": [{ "title": "SLX LCD", "width": 1040, "height": 760, "minWidth": 900, "minHeight": 640 }],
+    "windows": [{ "title": "SLX Studio — LCD Theme Builder", "width": 1040, "height": 760, "minWidth": 900, "minHeight": 640 }],
     "security": { "csp": null }
   },
   "bundle": { "active": true, "targets": ["deb", "appimage"], "icon": ["icons/icon.png"] }
