@@ -843,6 +843,7 @@ async function captureMedia(file) {
   const frames = [];
   let outputWidth = 0;
   let outputHeight = 0;
+  let fps = MEDIA_FPS;
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d", { alpha: true });
   const drawFrame = (source, width, height) => {
@@ -877,6 +878,7 @@ async function captureMedia(file) {
       if (!Number.isFinite(video.duration) || video.duration <= 0) throw new Error("Durasi video tidak dapat dibaca.");
       const duration = Math.min(video.duration, 6);
       const count = Math.min(MAX_MEDIA_FRAMES, Math.max(2, Math.ceil(duration * MEDIA_FPS)));
+      fps = Math.min(5, count / duration);
       for (let index = 0; index < count; index++) {
         const at = Math.min(duration - 0.03, (duration * index) / count);
         if (Math.abs(video.currentTime - at) > 0.01) {
@@ -892,20 +894,41 @@ async function captureMedia(file) {
       video.removeAttribute("src");
       video.load();
     } else {
-      const image = new Image();
-      image.src = url;
-      await image.decode();
       const animated = file.type === "image/gif" || file.name.toLowerCase().endsWith(".gif");
-      const count = animated ? 8 : 1;
-      for (let index = 0; index < count; index++) {
-        if (index) await new Promise((resolve) => setTimeout(resolve, 500));
-        drawFrame(image, image.naturalWidth, image.naturalHeight);
+      if (animated && typeof ImageDecoder !== "undefined") {
+        const decoder = new ImageDecoder({ data: await file.arrayBuffer(), type: file.type || "image/gif" });
+        try {
+          await decoder.tracks.ready;
+          const track = decoder.tracks.selectedTrack;
+          const frameCount = track?.frameCount || 1;
+          const count = Math.min(MAX_MEDIA_FRAMES, frameCount);
+          for (let index = 0; index < count; index++) {
+            const frameIndex = Math.floor(index * frameCount / count);
+            const { image } = await decoder.decode({ frameIndex });
+            drawFrame(image, image.displayWidth, image.displayHeight);
+            image.close();
+          }
+          const durationSeconds = (track?.frameCount ? track.duration / 1_000_000 : 0) || 1;
+          fps = Math.min(5, Math.max(0.2, count / durationSeconds));
+        } finally {
+          decoder.close();
+        }
+      } else {
+        const image = new Image();
+        image.src = url;
+        await image.decode();
+        const count = animated ? MAX_MEDIA_FRAMES : 1;
+        for (let index = 0; index < count; index++) {
+          if (index) await new Promise((resolve) => setTimeout(resolve, 120));
+          drawFrame(image, image.naturalWidth, image.naturalHeight);
+        }
+        fps = animated ? 5 : 1;
       }
     }
   } finally {
     URL.revokeObjectURL(url);
   }
-  return { frames, width: outputWidth, height: outputHeight };
+  return { frames, width: outputWidth, height: outputHeight, fps };
 }
 
 async function addMedia(file, x, y) {
@@ -924,7 +947,7 @@ async function addMedia(file, x, y) {
       theme.background = theme.background || {};
       theme.background.image = paths[0];
       theme.background.frames = paths;
-      theme.background.fps = paths.length > 1 ? MEDIA_FPS : 1;
+      theme.background.fps = paths.length > 1 ? captured.fps : 1;
       updateModel(false);
       toast(`${paths.length > 1 ? "Latar animasi" : "Gambar latar"} diterapkan.`);
       return;
@@ -934,7 +957,7 @@ async function addMedia(file, x, y) {
     const h = Math.max(40, Math.round(captured.height * scale));
     const pointX = Number.isFinite(x) ? x : dims().width / 2;
     const pointY = Number.isFinite(y) ? y : dims().height / 2;
-    theme.widgets.push({ type: "image", x: Math.max(0, pointX - w / 2), y: Math.max(0, pointY - h / 2), w, h, path: paths[0], frames: paths, fps: paths.length > 1 ? MEDIA_FPS : 1 });
+    theme.widgets.push({ type: "image", x: Math.max(0, pointX - w / 2), y: Math.max(0, pointY - h / 2), w, h, path: paths[0], frames: paths, fps: paths.length > 1 ? captured.fps : 1 });
     selectedWidget = theme.widgets.length - 1;
     updateModel();
     toast(`${paths.length > 1 ? `${paths.length} frame` : "Media"} ditambahkan ke kanvas.`);
