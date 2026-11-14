@@ -3,7 +3,7 @@ const $ = (id) => document.getElementById(id);
 const CANVAS_SIZE = 480;
 const MEDIA_FPS = 2;
 const MAX_MEDIA_FRAMES = 12;
-const MAX_FPS = 15;
+const MAX_FPS = 5;
 const MAX_PREVIEW_FPS = 8;
 
 let theme = null;
@@ -828,7 +828,9 @@ function createDefaultTheme() {
 }
 
 function isVideoFile(file) {
-  return file.type.startsWith("video/") || /\.(mp4|m4v|mov|webm|ogv)$/i.test(file.name);
+  return file.type.startsWith("video/")
+    || /\.(mp4|m4v|mov|webm|ogv|avi|mkv|mpeg|mpg|3gp|3g2|wmv|flv|ts|mts|m2ts|mxf|vob|asf|divx|f4v|m4v|m2v|mpe|mpv|3gpp|3gpp2|h264|h265|hevc|ivf|mkv|mp2|m2ts|nut|nsv|roq|yuv)$/i.test(file.name)
+    || (["", "application/octet-stream"].includes(file.type) && !isImageFile(file));
 }
 
 function isImageFile(file) {
@@ -863,7 +865,7 @@ async function captureMedia(file) {
       const metadataReady = new Promise((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error("Waktu tunggu video habis.")), 15000);
         video.addEventListener("loadedmetadata", () => { clearTimeout(timeout); resolve(); }, { once: true });
-        video.addEventListener("error", () => { clearTimeout(timeout); reject(new Error("Format video tidak didukung oleh WebView.")); }, { once: true });
+        video.addEventListener("error", () => { clearTimeout(timeout); reject(new Error("WebView sistem tidak dapat mendekode format atau codec video ini. Coba MP4 (H.264) atau WebM; file tidak diubah.")); }, { once: true });
       });
       video.src = url;
       await metadataReady;
@@ -1063,7 +1065,7 @@ async function init() {
     $("brightness").value = settings.brightness;
     $("brightness-value").value = `${settings.brightness}%`;
     $("orientation").value = settings.orientation;
-    $("frame-rate").value = String(Math.min(MAX_FPS, Math.max(5, Number(settings.frameRate) || 10)));
+    $("frame-rate").value = String(Math.min(MAX_FPS, Math.max(1, Number(settings.frameRate) || 5)));
     $("start-on-boot").checked = settings.startOnBoot;
     preferredThemeKey = settings.lastTheme || "";
     lastAppliedThemeKey = settings.lastTheme || "";

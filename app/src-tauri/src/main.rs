@@ -51,7 +51,7 @@ impl Default for AppSettings {
             brightness: 60,
             orientation: "landscape".into(),
             start_on_boot: false,
-            frame_rate: 10,
+            frame_rate: 5,
         }
     }
 }
@@ -248,7 +248,7 @@ fn save_app_settings(
         brightness: brightness.min(100),
         orientation,
         start_on_boot,
-        frame_rate: frame_rate.clamp(1, 15),
+        frame_rate: frame_rate.clamp(1, 5),
     };
     fs::create_dir_all(config_dir()).map_err(|e| e.to_string())?;
     let path = settings_path();
@@ -328,7 +328,7 @@ fn daemon_start(
         .arg(themes_dir().join(format!("{theme}.json")))
         .args(["--brightness", &brightness.min(100).to_string()])
         .args(["--orientation", &orientation])
-        .args(["--fps", &fps.clamp(1.0, 15.0).to_string()])
+        .args(["--fps", &fps.clamp(1.0, 5.0).to_string()])
         .spawn()
         .map_err(|e| format!("cannot start slxd: {e}"))?;
     *guard = Some(child);

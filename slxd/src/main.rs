@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use lcd_core::discover::list_ports;
 use lcd_core::{Lcd, Orientation, Rgba};
 use renderer::Renderer;
-use sensors::Sampler;
+use sensors::{Sampler, Snapshot};
 
 static STOP: AtomicBool = AtomicBool::new(false);
 
@@ -191,6 +191,10 @@ fn main() -> ExitCode {
     let mut lcd: Option<Lcd> = None;
     let mut last_frame: Option<Rgba> = None;
     let mut backoff = 1u64;
+    let mut snapshot = Snapshot::default();
+    let mut last_sample = Instant::now();
+    let sample_period = Duration::from_secs(1);
+    let _ = sampler.sample();
 
     while !STOP.load(Ordering::SeqCst) {
         let t0 = Instant::now();
@@ -216,8 +220,11 @@ fn main() -> ExitCode {
             }
         }
 
-        let snap = sampler.sample();
-        match rd.render(&snap) {
+        if last_sample.elapsed() >= sample_period {
+            snapshot = sampler.sample();
+            last_sample = Instant::now();
+        }
+        match rd.render(&snapshot) {
             Ok(frame) => {
                 if let Some(l) = lcd.as_mut() {
                     let result = match last_frame.as_ref() {
