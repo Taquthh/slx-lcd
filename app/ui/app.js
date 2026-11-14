@@ -3,7 +3,8 @@ const $ = (id) => document.getElementById(id);
 const CANVAS_SIZE = 480;
 const MEDIA_FPS = 2;
 const MAX_MEDIA_FRAMES = 12;
-const MAX_FPS = 60;
+const MAX_FPS = 15;
+const MAX_PREVIEW_FPS = 8;
 
 let theme = null;
 let currentThemeKey = "aqua";
@@ -15,7 +16,6 @@ let selectedWidget = -1;
 let mediaPurpose = "widget";
 let daemonActive = false;
 let previewBusy = false;
-let previewQueued = false;
 let dragState = null;
 let previewTimer = null;
 let statsTimer = null;
@@ -68,10 +68,7 @@ function queuePreview(force = true) {
 
 async function renderPreview(force = false) {
   if (!theme || (!daemonActive && !document.body.classList.contains("editor-active") && !force)) return;
-  if (previewBusy) {
-    previewQueued = previewQueued || force;
-    return;
-  }
+  if (previewBusy) return;
   previewBusy = true;
   try {
     const image = await invoke("preview", { themeJson: serializableTheme() });
@@ -80,10 +77,6 @@ async function renderPreview(force = false) {
     toast(String(error), true);
   } finally {
     previewBusy = false;
-    if (previewQueued) {
-      previewQueued = false;
-      renderPreview(true);
-    }
   }
 }
 
@@ -99,8 +92,8 @@ function previewFrameRate() {
 
 function updatePreviewPolling() {
   clearInterval(previewTimer);
-  const fps = previewFrameRate();
-  const interval = fps ? Math.max(16, Math.ceil(1000 / fps)) : 500;
+  const fps = Math.min(MAX_PREVIEW_FPS, previewFrameRate());
+  const interval = fps ? Math.max(125, Math.ceil(1000 / fps)) : 500;
   previewTimer = setInterval(() => renderPreview(), interval);
 }
 
@@ -597,7 +590,13 @@ async function renderThemeGallery(names) {
     editButton.className = "theme-card-edit";
     editButton.textContent = "Edit tema";
     editButton.addEventListener("click", () => loadTheme(item.key).catch((error) => toast(String(error), true)));
-    actions.append(loadButton, editButton);
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "theme-card-delete";
+    deleteButton.textContent = "Hapus";
+    deleteButton.setAttribute("aria-label", `Hapus tema ${item.title}`);
+    deleteButton.addEventListener("click", () => deleteTheme(item));
+    actions.append(loadButton, editButton, deleteButton);
     details.append(copy, actions);
     card.append(previewButton, details);
     return card;
@@ -609,6 +608,21 @@ async function renderThemeGallery(names) {
   setFeaturedTheme(items.find((item) => item.key === preferredThemeKey) || items.find((item) => item.image) || items[0]);
   preferredThemeKey = "";
   applyThemeSearch();
+}
+
+async function deleteTheme(item) {
+  if (!window.confirm(`Hapus tema “${item.title}” beserta aset medianya? Tindakan ini tidak dapat dibatalkan.`)) return;
+  try {
+    if (daemonActive && lastAppliedThemeKey === item.key) await stopTheme();
+    await invoke("delete_theme", { name: item.key });
+    if (featuredThemeKey === item.key) featuredThemeKey = "";
+    if (preferredThemeKey === item.key) preferredThemeKey = "";
+    const names = await refreshThemeList();
+    toast(`Tema “${item.title}” dihapus.`);
+    if (!names.length) setFeaturedTheme(null);
+  } catch (error) {
+    toast(String(error), true);
+  }
 }
 
 function applyThemeSearch() {
@@ -968,6 +982,8 @@ $("featured-apply-theme").onclick = () => featuredThemeKey && applySavedTheme(fe
 $("featured-edit-theme").onclick = () => featuredThemeKey && loadTheme(featuredThemeKey).catch((error) => toast(String(error), true));
 $("home-stop-theme").onclick = () => stopTheme().catch((error) => toast(String(error), true));
 $("theme-search").addEventListener("input", applyThemeSearch);
+$("theme-prev").addEventListener("click", () => $("theme-gallery").scrollBy({ left: -320, behavior: "smooth" }));
+$("theme-next").addEventListener("click", () => $("theme-gallery").scrollBy({ left: 320, behavior: "smooth" }));
 $("close-theme-preview").onclick = () => $("theme-preview-dialog").close();
 $("dialog-edit-theme").onclick = () => {
   const key = $("dialog-edit-theme").dataset.theme;
@@ -1047,7 +1063,7 @@ async function init() {
     $("brightness").value = settings.brightness;
     $("brightness-value").value = `${settings.brightness}%`;
     $("orientation").value = settings.orientation;
-    $("frame-rate").value = settings.frameRate || MAX_FPS;
+    $("frame-rate").value = String(Math.min(MAX_FPS, Math.max(5, Number(settings.frameRate) || 10)));
     $("start-on-boot").checked = settings.startOnBoot;
     preferredThemeKey = settings.lastTheme || "";
     lastAppliedThemeKey = settings.lastTheme || "";

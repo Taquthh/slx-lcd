@@ -1,0 +1,28 @@
+{
+  "name": "Mata Robot Imut",
+  "width": 480,
+  "height": 480,
+  "background": { "color": "#08121f" },
+  "widgets": [
+    { "type": "rect", "x": 34, "y": 53, "w": 412, "h": 374, "radius": 118, "color": "#14263a" },
+    { "type": "rect", "x": 78, "y": 121, "w": 324, "h": 226, "radius": 94, "color": "#1c3851" },
+    { "type": "rect", "x": 94, "y": 156, "w": 122, "h": 112, "radius": 54, "color": "#effcff" },
+    { "type": "rect", "x": 264, "y": 156, "w": 122, "h": 112, "radius": 54, "color": "#effcff" },
+    { "type": "rect", "x": 132, "y": 184, "w": 48, "h": 56, "radius": 23, "color": "#22d3c5" },
+    { "type": "rect", "x": 302, "y": 184, "w": 48, "h": 56, "radius": 23, "color": "#22d3c5" },
+    { "type": "rect", "x": 145, "y": 193, "w": 13, "h": 16, "radius": 7, "color": "#ffffff" },
+    { "type": "rect", "x": 315, "y": 193, "w": 13, "h": 16, "radius": 7, "color": "#ffffff" },
+    { "type": "rect", "x": 118, "y": 286, "w": 40, "h": 13, "radius": 7, "color": "#ff8fa3" },
+    { "type": "rect", "x": 322, "y": 286, "w": 40, "h": 13, "radius": 7, "color": "#ff8fa3" },
+    { "type": "rect", "x": 192, "y": 301, "w": 96, "h": 13, "radius": 7, "color": "#69e4dc" },
+    { "type": "text", "x": 240, "y": 363, "text": "CPU {cpu.usage}%  ·  {cpu.temp}°C", "size": 18, "bold": true, "align": "center", "color": "#c3d6e9" },
+    { "type": "text", "x": 240, "y": 391, "text": "SLX  ·  YOUR LITTLE HELPER", "size": 10, "bold": true, "align": "center", "color": "#6f91a9" }
+  ],
+  "animations": [
+    { "widget": 4, "property": "y", "from": 181, "to": 190, "duration_ms": 2100, "easing": "ease_in_out", "mode": "ping_pong" },
+    { "widget": 5, "property": "y", "from": 190, "to": 181, "duration_ms": 2400, "delay_ms": 350, "easing": "ease_in_out", "mode": "ping_pong" },
+    { "widget": 2, "property": "h", "from": 112, "to": 12, "duration_ms": 360, "delay_ms": 2800, "easing": "ease_in_out", "mode": "ping_pong" },
+    { "widget": 3, "property": "h", "from": 112, "to": 12, "duration_ms": 360, "delay_ms": 2815, "easing": "ease_in_out", "mode": "ping_pong" },
+    { "widget": 10, "property": "w", "from": 96, "to": 74, "duration_ms": 1600, "easing": "ease_in_out", "mode": "ping_pong" }
+  ]
+}

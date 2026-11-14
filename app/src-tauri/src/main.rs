@@ -51,7 +51,7 @@ impl Default for AppSettings {
             brightness: 60,
             orientation: "landscape".into(),
             start_on_boot: false,
-            frame_rate: 60,
+            frame_rate: 10,
         }
     }
 }
@@ -135,6 +135,20 @@ fn read_theme(name: String) -> Result<String, String> {
         return Err("invalid theme name".into());
     }
     fs::read_to_string(themes_dir().join(format!("{name}.json"))).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_theme(name: String) -> Result<(), String> {
+    if !valid_name(&name) {
+        return Err("invalid theme name".into());
+    }
+    let path = themes_dir().join(format!("{name}.json"));
+    fs::remove_file(path).map_err(|e| e.to_string())?;
+    let assets = themes_dir().join(format!("{name}_assets"));
+    if assets.exists() {
+        fs::remove_dir_all(assets).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -234,7 +248,7 @@ fn save_app_settings(
         brightness: brightness.min(100),
         orientation,
         start_on_boot,
-        frame_rate: frame_rate.clamp(1, 60),
+        frame_rate: frame_rate.clamp(1, 15),
     };
     fs::create_dir_all(config_dir()).map_err(|e| e.to_string())?;
     let path = settings_path();
@@ -314,7 +328,7 @@ fn daemon_start(
         .arg(themes_dir().join(format!("{theme}.json")))
         .args(["--brightness", &brightness.min(100).to_string()])
         .args(["--orientation", &orientation])
-        .args(["--fps", &fps.clamp(1.0, 60.0).to_string()])
+        .args(["--fps", &fps.clamp(1.0, 15.0).to_string()])
         .spawn()
         .map_err(|e| format!("cannot start slxd: {e}"))?;
     *guard = Some(child);
@@ -378,6 +392,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             list_themes,
             read_theme,
+            delete_theme,
             save_theme,
             save_media_frames,
             get_app_settings,
