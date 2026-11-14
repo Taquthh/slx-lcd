@@ -8,7 +8,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
@@ -20,6 +20,7 @@ struct AppState {
     last_snapshot: Mutex<Snapshot>,
     daemon: Mutex<Option<Child>>,
     settings: Mutex<AppSettings>,
+    animation_started: Instant,
 }
 
 impl Drop for AppState {
@@ -40,6 +41,7 @@ struct AppSettings {
     brightness: u8,
     orientation: String,
     start_on_boot: bool,
+    frame_rate: u8,
 }
 
 impl Default for AppSettings {
@@ -49,6 +51,7 @@ impl Default for AppSettings {
             brightness: 60,
             orientation: "landscape".into(),
             start_on_boot: false,
+            frame_rate: 60,
         }
     }
 }
@@ -139,7 +142,8 @@ fn save_theme(name: String, json: String) -> Result<(), String> {
     if !valid_name(&name) {
         return Err("invalid theme name (use letters, digits, - and _)".into());
     }
-    Theme::from_json(&json).map_err(|e| e.to_string())?; // never save a broken theme
+    let parsed = Theme::from_json(&json).map_err(|e| e.to_string())?;
+    parsed.validate_animations()?; // never save a broken theme
     fs::create_dir_all(themes_dir()).map_err(|e| e.to_string())?;
     fs::write(themes_dir().join(format!("{name}.json")), json).map_err(|e| e.to_string())
 }
@@ -216,6 +220,7 @@ fn save_app_settings(
     brightness: u8,
     orientation: String,
     start_on_boot: bool,
+    frame_rate: u8,
 ) -> Result<(), String> {
     if !valid_name(&last_theme) {
         return Err("invalid theme name".into());
@@ -224,7 +229,13 @@ fn save_app_settings(
         return Err("invalid orientation".into());
     }
 
-    let settings = AppSettings { last_theme, brightness: brightness.min(100), orientation, start_on_boot };
+    let settings = AppSettings {
+        last_theme,
+        brightness: brightness.min(100),
+        orientation,
+        start_on_boot,
+        frame_rate: frame_rate.clamp(1, 60),
+    };
     fs::create_dir_all(config_dir()).map_err(|e| e.to_string())?;
     let path = settings_path();
     let temp_path = path.with_extension("json.tmp");
@@ -249,7 +260,8 @@ fn preview(state: tauri::State<AppState>, theme_json: String) -> Result<String, 
     let theme = Theme::from_json(&theme_json).map_err(|e| e.to_string())?;
     let rd = Renderer::new(theme, &themes_dir()).map_err(|e| e.to_string())?;
     let snap = state.last_snapshot.lock().unwrap().clone();
-    let frame = rd.render(&snap).map_err(|e| e.to_string())?;
+    let animation_ms = state.animation_started.elapsed().as_millis() as u64;
+    let frame = rd.render_with_elapsed(&snap, animation_ms).map_err(|e| e.to_string())?;
     let png = renderer::to_png(&frame).ok_or("PNG encoding failed")?;
     Ok(format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png)))
 }
@@ -302,7 +314,7 @@ fn daemon_start(
         .arg(themes_dir().join(format!("{theme}.json")))
         .args(["--brightness", &brightness.min(100).to_string()])
         .args(["--orientation", &orientation])
-        .args(["--fps", &fps.clamp(0.2, 10.0).to_string()])
+        .args(["--fps", &fps.clamp(1.0, 60.0).to_string()])
         .spawn()
         .map_err(|e| format!("cannot start slxd: {e}"))?;
     *guard = Some(child);
@@ -361,6 +373,7 @@ fn main() {
             last_snapshot: Mutex::new(Snapshot::default()),
             daemon: Mutex::new(None),
             settings: Mutex::new(settings),
+            animation_started: Instant::now(),
         })
         .invoke_handler(tauri::generate_handler![
             list_themes,

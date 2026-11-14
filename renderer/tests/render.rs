@@ -86,6 +86,33 @@ fn bar_fill_tracks_value() {
 }
 
 #[test]
+fn json_animation_moves_a_widget_at_its_keyframe_time() {
+    let theme = Theme::from_json(
+        r##"{"name":"motion","width":12,"height":4,"background":{"color":"#000000"},
+        "widgets":[{"type":"rect","x":0,"y":0,"w":2,"h":2,"color":"#ffffff"}],
+        "animations":[{"widget":0,"property":"x","from":0,"to":8,"duration_ms":2000,"mode":"once","easing":"linear"}]}"##,
+    )
+    .unwrap();
+    let renderer = Renderer::new(theme, Path::new(".")).unwrap();
+    let start = renderer.render_at(&snap(), 0).unwrap();
+    let middle = renderer.render_at(&snap(), 1).unwrap();
+    let red_at = |frame: &lcd_core::Rgba, x: usize| frame.data[(x + frame.width) * 4];
+    assert_eq!(red_at(&start, 0), 255);
+    assert_eq!(red_at(&middle, 0), 0);
+    assert_eq!(red_at(&middle, 4), 255);
+}
+
+#[test]
+fn invalid_animation_target_is_rejected() {
+    let theme = Theme::from_json(
+        r##"{"name":"invalid","widgets":[{"type":"rect","x":0,"y":0,"w":2,"h":2}],
+        "animations":[{"widget":0,"property":"size","from":12,"to":20,"duration_ms":1000}]}"##,
+    )
+    .unwrap();
+    assert!(Renderer::new(theme, Path::new(".")).is_err());
+}
+
+#[test]
 fn invalid_color_is_a_clear_error() {
     let err = Theme::from_json(r##"{"name":"t","widgets":[{"type":"rect","x":0,"y":0,"w":1,"h":1,"color":"red"}]}"##)
         .unwrap_err()

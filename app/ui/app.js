@@ -3,9 +3,11 @@ const $ = (id) => document.getElementById(id);
 const CANVAS_SIZE = 480;
 const MEDIA_FPS = 2;
 const MAX_MEDIA_FRAMES = 12;
+const MAX_FPS = 60;
 
 let theme = null;
 let currentThemeKey = "aqua";
+let isNewThemeDraft = false;
 let featuredThemeKey = "";
 let preferredThemeKey = "";
 let lastAppliedThemeKey = "";
@@ -83,6 +85,23 @@ async function renderPreview(force = false) {
       renderPreview(true);
     }
   }
+}
+
+function previewFrameRate() {
+  const rates = [];
+  if (theme?.animations?.length) rates.push(Number($("frame-rate")?.value) || MAX_FPS);
+  if (theme?.background?.frames?.length > 1) rates.push(Number(theme.background.fps) || MEDIA_FPS);
+  for (const widget of theme?.widgets || []) {
+    if (widget.type === "image" && widget.frames?.length > 1) rates.push(Number(widget.fps) || MEDIA_FPS);
+  }
+  return Math.min(MAX_FPS, Math.max(0, ...rates));
+}
+
+function updatePreviewPolling() {
+  clearInterval(previewTimer);
+  const fps = previewFrameRate();
+  const interval = fps ? Math.max(16, Math.ceil(1000 / fps)) : 500;
+  previewTimer = setInterval(() => renderPreview(), interval);
 }
 
 function widgetName(widget) {
@@ -306,7 +325,7 @@ function renderInspector() {
       if (colors.has(key)) fields.append(colorField(label, selected[key], (value) => onChange(key, value)));
       else if (key === "bold") fields.append(field(label, selected[key], (value) => onChange(key, value), { type: "checkbox" }));
       else if (key === "align") fields.append(choiceField(label, selected[key], ["left", "center", "right"], (value) => onChange(key, value)));
-      else if (numeric.has(key)) fields.append(field(label, selected[key], (value) => onChange(key, value), { type: "number", min: key === "fps" ? 0.2 : undefined, max: key === "fps" ? 10 : undefined, step: key === "fps" ? "0.2" : "1" }));
+      else if (numeric.has(key)) fields.append(field(label, selected[key], (value) => onChange(key, value), { type: "number", min: key === "fps" ? 0.2 : undefined, max: key === "fps" ? MAX_FPS : undefined, step: key === "fps" ? "0.2" : "1" }));
       else fields.append(field(label, selected[key], (value) => onChange(key, value), { multiline: key === "text" }));
     }
     if (selected.type === "image") {
@@ -338,6 +357,27 @@ function renderSelection() {
   renderOverlay();
   renderInspector();
   $("selection-label").textContent = selectedWidget >= 0 && theme.widgets[selectedWidget] ? widgetName(theme.widgets[selectedWidget]) : "Belum ada layer dipilih";
+}
+
+function addAnimationTrack() {
+  const widget = theme?.widgets?.[selectedWidget];
+  if (!widget) return toast("Pilih layer pada kanvas terlebih dahulu.", true);
+  if (theme.animations.length >= 64) return toast("Batas 64 track animasi per tema sudah tercapai.", true);
+  const property = widget.type === "gauge" ? "cy" : "y";
+  const from = Number(widget[property]) || 0;
+  theme.animations.push({
+    widget: selectedWidget,
+    property,
+    from,
+    to: from - 12,
+    duration_ms: 1600,
+    easing: "ease_in_out",
+    mode: "ping_pong",
+  });
+  updateSource();
+  updatePreviewPolling();
+  queuePreview(true);
+  toast("Track gerakan ditambahkan. Ubah nilai keyframe di JSON.");
 }
 
 function updateModel(renderInspectorToo = true) {
@@ -461,6 +501,7 @@ function normalizeTheme(value) {
   value.width = Math.max(64, Math.min(480, Number(value.width) || CANVAS_SIZE));
   value.height = Math.max(64, Math.min(480, Number(value.height) || CANVAS_SIZE));
   value.background = value.background || { color: "#0b101e" };
+  value.animations = Array.isArray(value.animations) ? value.animations : [];
   return value;
 }
 
@@ -591,9 +632,12 @@ async function loadTheme(key, preview = true) {
   const source = await invoke("read_theme", { name: key });
   theme = normalizeTheme(JSON.parse(source));
   currentThemeKey = key;
+  isNewThemeDraft = false;
+  $("theme-name").readOnly = true;
   $("studio-theme-name").textContent = theme.name || key;
   selectedWidget = -1;
   activateEditor();
+  updatePreviewPolling();
   await refreshThemeList();
   renderAll();
   if (!preview) return;
@@ -601,7 +645,7 @@ async function loadTheme(key, preview = true) {
 }
 
 function themeKey() {
-  return slug($("theme-name").value || theme?.name || currentThemeKey);
+  return isNewThemeDraft ? slug($("theme-name").value || theme?.name || currentThemeKey) : currentThemeKey;
 }
 
 async function saveTheme() {
@@ -611,6 +655,8 @@ async function saveTheme() {
   theme.name = $("theme-name").value.trim() || key;
   currentThemeKey = key;
   await invoke("save_theme", { name: key, json: serializableTheme() });
+  isNewThemeDraft = false;
+  $("theme-name").readOnly = true;
   await refreshThemeList(key);
   updateSource();
   toast(`Tema “${theme.name}” tersimpan.`);
@@ -623,6 +669,7 @@ async function saveSettings(lastTheme = lastAppliedThemeKey || currentThemeKey) 
     brightness: Number($("brightness")?.value || 60),
     orientation: $("orientation")?.value || "landscape",
     startOnBoot: $("start-on-boot").checked,
+    frameRate: Number($("frame-rate")?.value || MAX_FPS),
   });
 }
 
@@ -683,23 +730,19 @@ async function refreshStats() {
 }
 
 function startPolling() {
-  clearInterval(previewTimer);
   clearInterval(statsTimer);
-  previewTimer = setInterval(() => renderPreview(), 500);
+  updatePreviewPolling();
   statsTimer = setInterval(refreshStats, 1800);
 }
 
 async function applyTheme() {
   const key = await saveTheme();
-  const backgroundFps = theme.background?.frames?.length > 1 ? Number(theme.background.fps) || MEDIA_FPS : 1;
-  const animatedFps = (theme.widgets || []).filter((item) => item.type === "image" && item.frames?.length > 1)
-    .reduce((fps, item) => Math.max(fps, Number(item.fps) || MEDIA_FPS), backgroundFps);
   await invoke("daemon_stop");
   await invoke("daemon_start", {
     theme: key,
     brightness: Number($("brightness").value),
     orientation: $("orientation").value,
-    fps: animatedFps,
+    fps: Number($("frame-rate").value) || MAX_FPS,
   });
   await saveSettings(key);
   lastAppliedThemeKey = key;
@@ -714,15 +757,12 @@ async function applyTheme() {
 async function applySavedTheme(key) {
   const source = await invoke("read_theme", { name: key });
   const selectedTheme = normalizeTheme(JSON.parse(source));
-  const backgroundFps = selectedTheme.background?.frames?.length > 1 ? Number(selectedTheme.background.fps) || MEDIA_FPS : 1;
-  const animatedFps = (selectedTheme.widgets || []).filter((item) => item.type === "image" && item.frames?.length > 1)
-    .reduce((fps, item) => Math.max(fps, Number(item.fps) || MEDIA_FPS), backgroundFps);
   await invoke("daemon_stop");
   await invoke("daemon_start", {
     theme: key,
     brightness: Number($("brightness").value),
     orientation: $("orientation").value,
-    fps: animatedFps,
+    fps: Number($("frame-rate").value) || MAX_FPS,
   });
   await saveSettings(key);
   lastAppliedThemeKey = key;
@@ -757,12 +797,15 @@ function downloadJson() {
 
 function createDefaultTheme() {
   currentThemeKey = "tema-baru";
+  isNewThemeDraft = true;
+  $("theme-name").readOnly = false;
   theme = {
     name: "Tema baru",
     width: CANVAS_SIZE,
     height: CANVAS_SIZE,
     background: { color: "#0b101e", image: null, frames: [], fps: MEDIA_FPS },
     widgets: [],
+    animations: [],
   };
   selectedWidget = -1;
   $("studio-theme-name").textContent = theme.name;
@@ -950,12 +993,17 @@ $("toggle-json").onclick = () => {
   if (!panel.hidden) $("json-source").value = serializableTheme();
 };
 $("close-json").onclick = () => { $("json-panel").hidden = true; };
-$("apply-json").onclick = () => {
+$("add-animation-track").onclick = addAnimationTrack;
+$("apply-json").onclick = async () => {
   try {
-    theme = normalizeTheme(JSON.parse($("json-source").value));
+    const nextTheme = normalizeTheme(JSON.parse($("json-source").value));
+    const image = await invoke("preview", { themeJson: JSON.stringify(nextTheme) });
+    theme = nextTheme;
     selectedWidget = -1;
+    updatePreviewPolling();
     renderAll();
-    toast("JSON diterapkan ke kanvas.");
+    $("preview").src = image;
+    toast("JSON dan animasi diterapkan ke kanvas.");
   } catch (error) { toast(`JSON tidak valid: ${error.message}`, true); }
 };
 $("json-input").addEventListener("change", async (event) => {
@@ -964,9 +1012,12 @@ $("json-input").addEventListener("change", async (event) => {
   try {
     theme = normalizeTheme(JSON.parse(await file.text()));
     currentThemeKey = slug(file.name.replace(/\.json$/i, "")) || "imported-theme";
+    isNewThemeDraft = true;
+    $("theme-name").readOnly = false;
     $("studio-theme-name").textContent = theme.name || currentThemeKey;
     selectedWidget = -1;
     activateEditor();
+    updatePreviewPolling();
     await refreshThemeList();
     renderAll();
     toast("Tema JSON dibuka. Simpan untuk menambahkannya ke daftar tema.");
@@ -982,6 +1033,13 @@ $("start-on-boot").addEventListener("change", async () => {
 $("brightness").addEventListener("input", () => { $("brightness-value").value = `${$("brightness").value}%`; });
 $("brightness").addEventListener("change", () => saveSettings().catch((error) => toast(String(error), true)));
 $("orientation").addEventListener("change", () => saveSettings().catch((error) => toast(String(error), true)));
+$("frame-rate").addEventListener("change", async () => {
+  try {
+    await saveSettings();
+    updatePreviewPolling();
+    if (daemonActive && lastAppliedThemeKey) await applySavedTheme(lastAppliedThemeKey);
+  } catch (error) { toast(String(error), true); }
+});
 
 async function init() {
   try {
@@ -989,6 +1047,7 @@ async function init() {
     $("brightness").value = settings.brightness;
     $("brightness-value").value = `${settings.brightness}%`;
     $("orientation").value = settings.orientation;
+    $("frame-rate").value = settings.frameRate || MAX_FPS;
     $("start-on-boot").checked = settings.startOnBoot;
     preferredThemeKey = settings.lastTheme || "";
     lastAppliedThemeKey = settings.lastTheme || "";
@@ -998,7 +1057,7 @@ async function init() {
     await refreshStats();
     setInterval(updateState, 1800);
     statsTimer = setInterval(refreshStats, 1800);
-    previewTimer = setInterval(() => renderPreview(), 500);
+    updatePreviewPolling();
   } catch (error) {
     toast(String(error), true);
   }

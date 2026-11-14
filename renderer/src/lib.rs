@@ -6,7 +6,7 @@ pub mod theme;
 
 use std::ffi::CString;
 use std::path::{Component, Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use ab_glyph::{point, Font, FontRef, PxScale, ScaleFont};
 use lcd_core::Rgba;
@@ -16,7 +16,7 @@ use tiny_skia::{
     Color as SkColor, FillRule, LineCap, Paint, PathBuilder, Pixmap, PixmapPaint, Stroke, Transform,
 };
 
-pub use theme::{Align, Background, Color, Theme, Widget};
+pub use theme::{Align, Animation, AnimationMode, AnimationProperty, Background, Color, Easing, Theme, Widget};
 
 const FONT_REGULAR: &[u8] = include_bytes!("../assets/DejaVuSans.ttf");
 const FONT_BOLD: &[u8] = include_bytes!("../assets/DejaVuSans-Bold.ttf");
@@ -31,6 +31,8 @@ pub enum RenderError {
     Image(PathBuf, String),
     #[error("cannot create a {0}x{1} canvas")]
     Canvas(usize, usize),
+    #[error("invalid animation: {0}")]
+    Animation(String),
 }
 
 pub struct Renderer {
@@ -39,6 +41,7 @@ pub struct Renderer {
     images: Vec<Option<Vec<Pixmap>>>, // parallel to theme.widgets
     regular: FontRef<'static>,
     bold: FontRef<'static>,
+    animation_started: Instant,
 }
 
 impl Renderer {
@@ -50,6 +53,7 @@ impl Renderer {
     }
 
     pub fn new(theme: Theme, base_dir: &Path) -> Result<Self, RenderError> {
+        theme.validate_animations().map_err(RenderError::Animation)?;
         let load = |rel: &str| -> Result<Pixmap, RenderError> {
             let relative = Path::new(rel);
             let unresolved = base_dir.join(relative);
@@ -102,24 +106,30 @@ impl Renderer {
             images,
             regular: FontRef::try_from_slice(FONT_REGULAR).expect("bundled font"),
             bold: FontRef::try_from_slice(FONT_BOLD).expect("bundled font"),
+            animation_started: Instant::now(),
         })
     }
 
     /// Render with the current wall-clock time.
     pub fn render(&self, snap: &Snapshot) -> Result<Rgba, RenderError> {
+        self.render_with_elapsed(snap, self.animation_started.elapsed().as_millis() as u64)
+    }
+
+    pub fn render_with_elapsed(&self, snap: &Snapshot, animation_ms: u64) -> Result<Rgba, RenderError> {
         let now_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as u64;
-        self.render_with_time(snap, (now_ms / 1000) as i64, now_ms)
+        self.render_with_time(snap, (now_ms / 1000) as i64, now_ms, animation_ms)
     }
 
     /// Render using `unix_secs` for clock widgets (deterministic, for tests).
     pub fn render_at(&self, snap: &Snapshot, unix_secs: i64) -> Result<Rgba, RenderError> {
-        self.render_with_time(snap, unix_secs, (unix_secs.max(0) as u64).saturating_mul(1000))
+        let now_ms = (unix_secs.max(0) as u64).saturating_mul(1000);
+        self.render_with_time(snap, unix_secs, now_ms, now_ms)
     }
 
-    fn render_with_time(&self, snap: &Snapshot, unix_secs: i64, now_ms: u64) -> Result<Rgba, RenderError> {
+    fn render_with_time(&self, snap: &Snapshot, unix_secs: i64, now_ms: u64, animation_ms: u64) -> Result<Rgba, RenderError> {
         let (w, h) = (self.theme.width, self.theme.height);
         let mut pm = Pixmap::new(w as u32, h as u32).ok_or(RenderError::Canvas(w, h))?;
         // opaque canvas: every pixel ends up with alpha 255
@@ -130,7 +140,7 @@ impl Renderer {
         }
         if !self.background.is_empty() {
             let frame_index = if self.background.len() > 1 {
-                ((now_ms as f64 / 1000.0 * self.theme.background.fps.clamp(0.2, 10.0) as f64).floor() as usize) % self.background.len()
+                ((now_ms as f64 / 1000.0 * self.theme.background.fps.clamp(0.2, 60.0) as f64).floor() as usize) % self.background.len()
             } else {
                 0
             };
@@ -140,8 +150,12 @@ impl Renderer {
             pm.draw_pixmap(0, 0, bg.as_ref(), &PixmapPaint::default(), Transform::from_scale(sx, sy), None);
         }
 
-        for (i, widget) in self.theme.widgets.iter().enumerate() {
-            match widget {
+        for (i, original_widget) in self.theme.widgets.iter().enumerate() {
+            let mut widget = original_widget.clone();
+            for animation in self.theme.animations.iter().filter(|animation| animation.widget == i) {
+                apply_animation(&mut widget, animation.property, animation.value_at(animation_ms));
+            }
+            match &widget {
                 Widget::Rect { x, y, w, h, radius, color } => fill_rrect(&mut pm, *x, *y, *w, *h, *radius, *color),
                 Widget::Text { x, y, text, size, color, bold, align } => {
                     let s = metrics::render_template(text, snap);
@@ -171,7 +185,7 @@ impl Renderer {
                     if let Some(frames) = &self.images[i] {
                         if !frames.is_empty() {
                             let frame_index = if frames.len() > 1 {
-                                ((now_ms as f64 / 1000.0 * fps.clamp(0.2, 10.0) as f64).floor() as usize) % frames.len()
+                                ((now_ms as f64 / 1000.0 * fps.clamp(0.2, 60.0) as f64).floor() as usize) % frames.len()
                             } else {
                                 0
                             };
@@ -219,6 +233,49 @@ impl Renderer {
                 });
             }
         }
+    }
+}
+
+fn apply_animation(widget: &mut Widget, property: AnimationProperty, value: f32) {
+    match property {
+        AnimationProperty::X => match widget {
+            Widget::Text { x, .. }
+            | Widget::Clock { x, .. }
+            | Widget::Rect { x, .. }
+            | Widget::Bar { x, .. }
+            | Widget::Image { x, .. } => *x = value,
+            Widget::Gauge { .. } => {}
+        },
+        AnimationProperty::Y => match widget {
+            Widget::Text { y, .. }
+            | Widget::Clock { y, .. }
+            | Widget::Rect { y, .. }
+            | Widget::Bar { y, .. }
+            | Widget::Image { y, .. } => *y = value,
+            Widget::Gauge { .. } => {}
+        },
+        AnimationProperty::W => match widget {
+            Widget::Rect { w, .. } | Widget::Bar { w, .. } => *w = value,
+            Widget::Image { w, .. } => *w = Some(value),
+            _ => {}
+        },
+        AnimationProperty::H => match widget {
+            Widget::Rect { h, .. } | Widget::Bar { h, .. } => *h = value,
+            Widget::Image { h, .. } => *h = Some(value),
+            _ => {}
+        },
+        AnimationProperty::Cx => if let Widget::Gauge { cx, .. } = widget { *cx = value },
+        AnimationProperty::Cy => if let Widget::Gauge { cy, .. } = widget { *cy = value },
+        AnimationProperty::R => if let Widget::Gauge { r, .. } = widget { *r = value },
+        AnimationProperty::Size => match widget {
+            Widget::Text { size, .. } | Widget::Clock { size, .. } => *size = value,
+            _ => {}
+        },
+        AnimationProperty::Radius => match widget {
+            Widget::Rect { radius, .. } | Widget::Bar { radius, .. } => *radius = value,
+            _ => {}
+        },
+        AnimationProperty::Thickness => if let Widget::Gauge { thickness, .. } = widget { *thickness = value },
     }
 }
 

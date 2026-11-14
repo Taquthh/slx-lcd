@@ -107,6 +107,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .theme-picker select, .theme-name { height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); padding: 0 10px; }
 .theme-picker select { width: 142px; }
 .theme-name { width: 126px; }
+.theme-name[readonly] { color: #9babbc; cursor: default; }
 .top-actions { display: flex; align-items: center; gap: 7px; margin-left: auto; }
 .top-actions button, .quiet-button, .primary-button, .stop-button { border: 1px solid var(--line); border-radius: 8px; padding: 8px 11px; background: var(--panel); color: #c8d5e3; white-space: nowrap; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
 .top-actions button:hover, .quiet-button:hover { border-color: #60758e; background: var(--panel-raised); }
@@ -225,6 +226,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .json-panel { position: absolute; z-index: 5; inset: 8px; display: flex; flex-direction: column; padding: 14px; border: 1px solid #354960; border-radius: 11px; background: #101723; box-shadow: 0 18px 48px rgba(0,0,0,.6); }
 .json-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 #json-source { flex: 1; width: 100%; min-height: 220px; resize: none; border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: #090f18; color: #c7e7e2; font: 11px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; tab-size: 2; }
+.motion-guide { display: grid; gap: 7px; margin-top: 9px; padding: 10px; border: 1px solid rgba(37,224,204,.18); border-radius: 8px; background: rgba(37,224,204,.035); }
+.motion-guide > div { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.motion-guide strong { color: #dce9f3; font-size: 10px; }
+.motion-guide span { color: var(--muted); font-size: 8px; text-align: right; }
+.motion-guide code { overflow-wrap: anywhere; color: #9de4da; font: 8px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.motion-guide > button { justify-self: start; padding: 6px 8px; font-size: 9px; }
 .json-actions { display: flex; justify-content: flex-end; margin-top: 9px; }
 .toast { position: fixed; z-index: 10; right: 16px; bottom: 16px; max-width: min(460px, calc(100vw - 32px)); padding: 10px 13px; border: 1px solid var(--line); border-radius: 9px; background: #172335; color: var(--text); box-shadow: 0 10px 34px rgba(0,0,0,.35); opacity: 0; transform: translateY(8px); pointer-events: none; transition: .18s ease; }
 .toast.visible { opacity: 1; transform: translateY(0); }
@@ -310,6 +317,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .display-preview-stage::after { width: 510px; height: 510px; }
 .display-preview-stage .featured-device-inner { z-index: 1; width: min(62%, 332px); border: 2px solid rgba(178,198,219,.28); box-shadow: 0 0 0 7px rgba(255,255,255,.025), 0 18px 55px rgba(0,0,0,.42), inset 0 0 0 6px rgba(255,255,255,.025); }
 .display-preview-stage .featured-device-inner img { display: block; }
+.display-preview-stage .featured-device-inner img[hidden] { display: none; }
 .display-preview-stage #featured-preview-empty { gap: 13px; }
 .display-preview-stage #featured-preview-empty strong { max-width: 200px; font-size: 12px; }
 .display-theme-summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 2px 15px; }

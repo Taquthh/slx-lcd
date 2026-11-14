@@ -71,6 +71,82 @@ fn d_media_fps() -> f32 {
     2.0
 }
 
+fn d_animation_duration() -> u32 {
+    1200
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AnimationProperty {
+    X,
+    Y,
+    W,
+    H,
+    Cx,
+    Cy,
+    R,
+    Size,
+    Radius,
+    Thickness,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AnimationMode {
+    #[default]
+    Loop,
+    Once,
+    PingPong,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Easing {
+    #[default]
+    Linear,
+    EaseIn,
+    EaseOut,
+    EaseInOut,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+pub struct Animation {
+    pub widget: usize,
+    pub property: AnimationProperty,
+    pub from: f32,
+    pub to: f32,
+    #[serde(default = "d_animation_duration")]
+    pub duration_ms: u32,
+    #[serde(default)]
+    pub delay_ms: u32,
+    #[serde(default)]
+    pub easing: Easing,
+    #[serde(default)]
+    pub mode: AnimationMode,
+}
+
+impl Animation {
+    pub fn value_at(&self, elapsed_ms: u64) -> f32 {
+        let elapsed = elapsed_ms.saturating_sub(self.delay_ms as u64);
+        let duration = self.duration_ms.max(1) as u64;
+        let progress = match self.mode {
+            AnimationMode::Once => (elapsed as f64 / duration as f64).min(1.0) as f32,
+            AnimationMode::Loop => (elapsed % duration) as f32 / duration as f32,
+            AnimationMode::PingPong => {
+                let progress = (elapsed % duration) as f32 / duration as f32;
+                if (elapsed / duration) % 2 == 0 { progress } else { 1.0 - progress }
+            }
+        };
+        let eased = match self.easing {
+            Easing::Linear => progress,
+            Easing::EaseIn => progress * progress,
+            Easing::EaseOut => 1.0 - (1.0 - progress) * (1.0 - progress),
+            Easing::EaseInOut => progress * progress * (3.0 - 2.0 * progress),
+        };
+        self.from + (self.to - self.from) * eased
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum Widget {
@@ -201,10 +277,59 @@ pub struct Theme {
     pub background: Background,
     #[serde(default)]
     pub widgets: Vec<Widget>,
+    #[serde(default)]
+    pub animations: Vec<Animation>,
 }
 
 impl Theme {
     pub fn from_json(text: &str) -> Result<Theme, serde_json::Error> {
         serde_json::from_str(text)
+    }
+
+    pub fn validate_animations(&self) -> Result<(), String> {
+        if self.animations.len() > 64 {
+            return Err("a theme can contain at most 64 animation tracks".into());
+        }
+        for (index, animation) in self.animations.iter().enumerate() {
+            let Some(widget) = self.widgets.get(animation.widget) else {
+                return Err(format!("animation {index} targets a missing widget"));
+            };
+            if animation.duration_ms == 0 || animation.duration_ms > 120_000 {
+                return Err(format!("animation {index} duration must be between 1 and 120000 ms"));
+            }
+            if !animation.from.is_finite()
+                || !animation.to.is_finite()
+                || animation.from.abs() > 2048.0
+                || animation.to.abs() > 2048.0
+            {
+                return Err(format!("animation {index} values must be finite and within ±2048"));
+            }
+            let compatible = match widget {
+                Widget::Text { .. } | Widget::Clock { .. } => matches!(
+                    animation.property,
+                    AnimationProperty::X | AnimationProperty::Y | AnimationProperty::Size
+                ),
+                Widget::Rect { .. } => matches!(
+                    animation.property,
+                    AnimationProperty::X | AnimationProperty::Y | AnimationProperty::W | AnimationProperty::H | AnimationProperty::Radius
+                ),
+                Widget::Bar { .. } => matches!(
+                    animation.property,
+                    AnimationProperty::X | AnimationProperty::Y | AnimationProperty::W | AnimationProperty::H | AnimationProperty::Radius
+                ),
+                Widget::Gauge { .. } => matches!(
+                    animation.property,
+                    AnimationProperty::Cx | AnimationProperty::Cy | AnimationProperty::R | AnimationProperty::Thickness
+                ),
+                Widget::Image { .. } => matches!(
+                    animation.property,
+                    AnimationProperty::X | AnimationProperty::Y | AnimationProperty::W | AnimationProperty::H
+                ),
+            };
+            if !compatible {
+                return Err(format!("animation {index} property does not match its widget type"));
+            }
+        }
+        Ok(())
     }
 }
